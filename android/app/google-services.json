@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "1055484438092",
+    "project_id": "cyclus-9ab63",
+    "storage_bucket": "cyclus-9ab63.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1055484438092:android:1c1be4851e963fc71bb6e9",
+        "android_client_info": {
+          "package_name": "com.example.period_tracker"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "1055484438092-a2uj1r2ggoh6ll9o1bq123ln4i0dnnc6.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.period_tracker",
+            "certificate_hash": "995fe73b3b65c3ecab9c786f27ad90e8622c0d8f"
+          }
+        },
+        {
+          "client_id": "1055484438092-geiod99ao0ih22v4v19hqd137k36pong.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyArlAMJzxDLEyExtmxR-PkBuWzuIAuHTd0"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "1055484438092-geiod99ao0ih22v4v19hqd137k36pong.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "1055484438092-rcmtd41br0sg0179479na9mrn0mprfcv.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.periodTracker"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

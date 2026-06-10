@@ -1,0 +1,186 @@
+# Codemagic CI/CD configuration for the Cyclus Flutter app.
+# Docs: https://docs.codemagic.io/yaml-quick-start/
+#
+# WHAT THIS DOES
+# --------------
+# * Builds a signed iOS .ipa on a Mac mini runner in the cloud
+# * Auto-adds GoogleService-Info.plist to the Xcode project (Windows users
+#   can't open Xcode locally to do this — see the Ruby script below)
+# * Optionally publishes to TestFlight if you opt in below
+# * Emails the .ipa link to you when the build finishes
+#
+# ONE-TIME SETUP (see the README section in this file's commit message)
+# --------------
+# 1. Apple Developer Program ($99/yr) — sign up at developer.apple.com
+# 2. Codemagic account — sign up at codemagic.io with your GitHub
+# 3. App Store Connect API key — generate at:
+#      https://appstoreconnect.apple.com/access/integrations/api
+#    Save the .p8 file and note the Key ID + Issuer ID.
+# 4. In Codemagic: Teams → Integrations → App Store Connect → Add key
+#    Name it "codemagic" (must match `integrations:` below).
+# 5. Register the bundle id `com.example.periodTracker` in App Store Connect
+#    (or change BUNDLE_ID below to your own and update firebase_options.dart
+#    and ios/Runner/Info.plist to match).
+
+workflows:
+  ios-release:
+    name: iOS Release (TestFlight)
+    instance_type: mac_mini_m2
+    max_build_duration: 60
+
+    # Codemagic injects an App Store Connect API key here so xcodebuild can
+    # auto-create + sync provisioning profiles. The string "codemagic" must
+    # match the integration name you created in the Codemagic UI.
+    integrations:
+      app_store_connect: codemagic
+
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+      ios_signing:
+        distribution_type: app_store
+        bundle_identifier: com.example.periodTracker
+      vars:
+        BUNDLE_ID: "com.example.periodTracker"
+        # Uncomment and fill once you've created the app in App Store Connect
+        # APP_STORE_APPLE_ID: 0000000000
+
+    triggering:
+      events:
+        - push
+      branch_patterns:
+        - pattern: main
+          include: true
+          source: true
+
+    scripts:
+      - name: Set up keychain
+        script: |
+          keychain initialize
+
+      - name: Fetch signing files
+        script: |
+          # Pulls (or creates) App Store provisioning profile + cert from
+          # App Store Connect using the API key configured above.
+          app-store-connect fetch-signing-files "$BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Use fetched profiles
+        script: |
+          xcode-project use-profiles
+
+      - name: Get Flutter packages
+        script: |
+          flutter packages pub get
+
+      - name: Install pods
+        script: |
+          find . -name "Podfile" -execdir pod install \;
+
+      - name: Add GoogleService-Info.plist to the Xcode project
+        # Windows users can't open Xcode to drag-add the file. This Ruby
+        # snippet uses the xcodeproj gem (preinstalled on Codemagic Macs)
+        # to register the file with the Runner target so it gets bundled.
+        script: |
+          cd ios
+          ruby <<'RUBY'
+          require 'xcodeproj'
+          project_path = 'Runner.xcodeproj'
+          plist_name   = 'GoogleService-Info.plist'
+
+          project = Xcodeproj::Project.open(project_path)
+          target  = project.targets.find { |t| t.name == 'Runner' }
+          group   = project.main_group['Runner']
+
+          existing = group.files.find { |f| f.path == plist_name }
+          if existing
+            puts "#{plist_name} already in project — skipping"
+          else
+            file_ref = group.new_reference(plist_name)
+            target.resources_build_phase.add_file_reference(file_ref)
+            project.save
+            puts "Added #{plist_name} to Runner target"
+          end
+          RUBY
+
+      - name: Set build number
+        script: |
+          # Each TestFlight upload must have a higher build number than the
+          # last. Codemagic injects $BUILD_NUMBER (monotonically increasing).
+          cd ios
+          agvtool new-version -all $(($BUILD_NUMBER + 1))
+
+      - name: Flutter build ipa
+        script: |
+          flutter build ipa --release \
+            --build-name=1.0.$BUILD_NUMBER \
+            --build-number=$BUILD_NUMBER \
+            --export-options-plist=/Users/builder/export_options.plist
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      email:
+        recipients:
+          - friday69ai@gmail.com
+        notify:
+          success: true
+          failure: true
+
+      # Uncomment to auto-upload each successful build to TestFlight.
+      # app_store_connect:
+      #   auth: integration
+      #   submit_to_testflight: true
+      #   beta_groups:
+      #     - "Internal testers"
+
+  # Lightweight verification workflow — builds without code signing so you
+  # can confirm the Flutter code compiles on iOS even before you have an
+  # Apple Developer account. Useful as a first sanity check.
+  ios-verify:
+    name: iOS Verify (no signing)
+    instance_type: mac_mini_m2
+    max_build_duration: 30
+    environment:
+      flutter: stable
+      xcode: latest
+      cocoapods: default
+    triggering:
+      events: []  # manual only — don't fire on push
+    scripts:
+      - name: Get Flutter packages
+        script: flutter packages pub get
+      - name: Install pods
+        script: |
+          find . -name "Podfile" -execdir pod install \;
+      - name: Add GoogleService-Info.plist to the Xcode project
+        script: |
+          cd ios
+          ruby <<'RUBY'
+          require 'xcodeproj'
+          project = Xcodeproj::Project.open('Runner.xcodeproj')
+          target  = project.targets.find { |t| t.name == 'Runner' }
+          group   = project.main_group['Runner']
+          unless group.files.find { |f| f.path == 'GoogleService-Info.plist' }
+            target.resources_build_phase
+              .add_file_reference(group.new_reference('GoogleService-Info.plist'))
+            project.save
+          end
+          RUBY
+      - name: Build iOS (no codesign)
+        script: |
+          flutter build ios --release --no-codesign
+    artifacts:
+      - /tmp/xcodebuild_logs/*.log
+    publishing:
+      email:
+        recipients:
+          - friday69ai@gmail.com
+        notify:
+          success: true
+          failure: true

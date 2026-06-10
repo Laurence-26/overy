@@ -1,0 +1,85 @@
+rules_version = '2';
+
+// Cyclus Firestore Security Rules
+// --------------------------------
+// Deploy:
+//   firebase deploy --only firestore:rules --project cyclus-9ab63
+//
+// Security model:
+//   * Each user owns their own /users/{uid} doc + subcollections.
+//   * Linked partners get READ access to those when a paired
+//     /partnerships/{viewerUid_ownerUid} doc exists.
+//   * Anyone signed in can GET a specific /share_codes/{code} (to redeem it),
+//     but cannot LIST all codes.
+//   * Username -> uid lookup is publicly readable so the sign-in screen can
+//     resolve a typed username without auth.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ---- helpers ----
+    function isSignedIn() {
+      return request.auth != null;
+    }
+    function isUser(uid) {
+      return isSignedIn() && request.auth.uid == uid;
+    }
+    // True if a partnerships doc proves this user has been granted view-only
+    // access to ownerUid's data.
+    function isLinkedPartnerOf(ownerUid) {
+      return isSignedIn() && exists(
+        /databases/$(database)/documents/partnerships/$(request.auth.uid + '_' + ownerUid)
+      );
+    }
+
+    // ---- USERNAMES (public lookup) ----
+    match /usernames/{username} {
+      allow read: if true;
+      allow create, update: if isSignedIn()
+                            && request.auth.uid == request.resource.data.uid;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.uid;
+    }
+
+    // ---- SHARE CODES (partner invite codes) ----
+    match /share_codes/{code} {
+      // Fetching a single code by id (to redeem) — any signed-in user.
+      allow get: if isSignedIn();
+      // Listing codes — only your own (used during code-rotation cleanup).
+      allow list: if isSignedIn() && resource.data.uid == request.auth.uid;
+      // Only the owner can write or revoke their own code.
+      allow create, update: if isSignedIn()
+                            && request.auth.uid == request.resource.data.uid;
+      allow delete: if isSignedIn() && request.auth.uid == resource.data.uid;
+    }
+
+    // ---- PARTNERSHIPS (cross-user read gate) ----
+    // Doc id MUST be "<viewerUid>_<ownerUid>".
+    match /partnerships/{partnershipId} {
+      allow get, list: if isSignedIn() && (
+        resource.data.viewerUid == request.auth.uid ||
+        resource.data.ownerUid == request.auth.uid
+      );
+      allow create: if isSignedIn()
+                    && request.auth.uid == request.resource.data.viewerUid
+                    && partnershipId ==
+                       request.auth.uid + '_' + request.resource.data.ownerUid;
+      // Either side can break the link.
+      allow delete: if isSignedIn() && (
+        resource.data.viewerUid == request.auth.uid ||
+        resource.data.ownerUid == request.auth.uid
+      );
+    }
+
+    // ---- USERS + SUBCOLLECTIONS (the real data) ----
+    match /users/{uid} {
+      allow read: if isUser(uid) || isLinkedPartnerOf(uid);
+      allow create, update: if isUser(uid);
+      allow delete: if isUser(uid);
+
+      match /{document=**} {
+        allow read: if isUser(uid) || isLinkedPartnerOf(uid);
+        allow write: if isUser(uid);
+      }
+    }
+  }
+}
