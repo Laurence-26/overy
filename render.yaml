@@ -5,9 +5,8 @@ services:
     runtime: static
     plan: free
     branch: main
-    rootDir: privacy-site
-    buildCommand: ""
-    staticPublishPath: .
+    buildCommand: "echo ready"
+    staticPublishPath: ./privacy-site
     routes:
       - type: rewrite
         source: /*
