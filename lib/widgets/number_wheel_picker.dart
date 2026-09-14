@@ -12,15 +12,15 @@ class NumberWheelPicker extends StatefulWidget {
   final ValueChanged<int> onChanged;
   final Color accent;
 
-  const NumberWheelPicker({
+  NumberWheelPicker({
     super.key,
     required this.min,
     required this.max,
     required this.value,
     required this.onChanged,
     this.unit = 'days',
-    this.accent = AppColors.primary,
-  });
+    Color? accent,
+  }) : accent = accent ?? AppColors.primary;
 
   @override
   State<NumberWheelPicker> createState() => _NumberWheelPickerState();
@@ -52,7 +52,7 @@ class _NumberWheelPickerState extends State<NumberWheelPicker> {
       children: [
         // Big highlighted value
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 36, vertical: 22),
+          padding: EdgeInsets.symmetric(horizontal: 36, vertical: 22),
           decoration: BoxDecoration(
             gradient: LinearGradient(
               colors: [
@@ -75,10 +75,10 @@ class _NumberWheelPickerState extends State<NumberWheelPicker> {
                   height: 1,
                 ),
               ),
-              const SizedBox(height: 4),
+              SizedBox(height: 4),
               Text(
                 widget.unit,
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textSecondary,
                   fontSize: 14,
                 ),
@@ -86,7 +86,7 @@ class _NumberWheelPickerState extends State<NumberWheelPicker> {
             ],
           ),
         ),
-        const SizedBox(height: 28),
+        SizedBox(height: 28),
         // Wheel
         SizedBox(
           height: _itemHeight,
@@ -118,9 +118,8 @@ class _NumberWheelPickerState extends State<NumberWheelPicker> {
                               ? widget.accent
                               : AppColors.textTertiary,
                           fontSize: isSelected ? 28 : 20,
-                          fontWeight: isSelected
-                              ? FontWeight.w700
-                              : FontWeight.w500,
+                          fontWeight:
+                              isSelected ? FontWeight.w700 : FontWeight.w500,
                         ),
                         child: Text('$v'),
                       ),

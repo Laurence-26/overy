@@ -3,39 +3,58 @@ import 'dart:math' as math;
 import '../core/constants.dart';
 import '../models/cycle.dart';
 import '../models/cycle_prediction.dart';
+import '../models/daily_log.dart';
 
-/// Pure functions for cycle prediction. No I/O, fully testable.
+/// On-device cycle math. No I/O.
 ///
-/// Handles BOTH regular and irregular cycles:
-///   • Regular  → uses rolling average over up to [maxCyclesForAverage] cycles.
-///   • Irregular → detected when stdev > [irregularityThresholdDays];
-///                 prediction widens its confidence + shows a range.
+/// Designed for both regular and irregular cycles:
+/// * Recent cycles weigh more (exponential decay).
+/// * Outliers are dropped with a robust median/MAD filter.
+/// * Ovulation uses a learned luteal length when logs show OPK / pain /
+/// egg-white mucus; otherwise a 14-day luteal phase (10-16 clamp).
+/// * Irregular cycles get a date *range* and a wider fertile window.
+/// * If the predicted start is already in the past, the period is marked
+/// late instead of inventing a new date.
 class PredictionEngine {
   PredictionEngine._();
 
-  /// Returns null if there is not even one logged cycle.
   static CyclePrediction? predict({
     required List<Cycle> cyclesNewestFirst,
     required int fallbackCycleLength,
     required int fallbackPeriodLength,
+    List<DailyLog> logs = const [],
+    bool userReportedIrregular = false,
+    int? age,
+    DateTime? now,
   }) {
     if (cyclesNewestFirst.isEmpty) return null;
-    final lastStart = cyclesNewestFirst.first.startDate;
+    final today = _stripTime(now ?? DateTime.now());
+    final last = cyclesNewestFirst.first;
+    final lastStart = _stripTime(last.startDate);
+    final lastStartLatest = last.startDateLatest != null
+        ? _stripTime(last.startDateLatest!)
+        : lastStart;
+    final startSpanDays =
+        math.max(0, lastStartLatest.difference(lastStart).inDays);
 
-    // Collect completed cycle lengths
-    final lengths = <int>[];
+    final rawLengths = <int>[];
     for (final c in cyclesNewestFirst) {
       if (c.cycleLength != null && c.cycleLength! > 0) {
-        lengths.add(c.cycleLength!);
+        rawLengths.add(c.cycleLength!);
       }
-      if (lengths.length >= AppConstants.maxCyclesForAverage) break;
+      if (rawLengths.length >= AppConstants.maxCyclesForAverage) break;
     }
 
-    final avgCycle = lengths.isEmpty
-        ? fallbackCycleLength
-        : (lengths.reduce((a, b) => a + b) / lengths.length).round();
+    final lengths = _rejectOutliers(rawLengths);
+    final used = lengths.isEmpty ? rawLengths : lengths;
 
-    // Period length average
+    final avgCycle = used.isEmpty
+        ? fallbackCycleLength.clamp(
+            AppConstants.minCycleLength, AppConstants.maxCycleLength)
+        : _weightedMean(used)
+            .round()
+            .clamp(AppConstants.minCycleLength, AppConstants.maxCycleLength);
+
     final periodLengths = cyclesNewestFirst
         .take(AppConstants.maxCyclesForAverage)
         .map((c) => c.periodLength)
@@ -44,35 +63,65 @@ class PredictionEngine {
     final avgPeriod = periodLengths.isEmpty
         ? fallbackPeriodLength
         : (periodLengths.reduce((a, b) => a + b) / periodLengths.length)
-            .round();
+            .round()
+            .clamp(AppConstants.minPeriodLength, AppConstants.maxPeriodLength);
 
-    // Irregularity = stdev of cycle lengths
-    final stdev = _stdev(lengths);
-    final isIrregular =
-        lengths.length >= AppConstants.minCyclesForPrediction &&
-            stdev > AppConstants.irregularityThresholdDays;
+    final stdev = _stdev(used);
+    final cv = used.isEmpty || avgCycle == 0 ? 0.0 : stdev / avgCycle;
+    final isIrregular = userReportedIrregular ||
+        startSpanDays > 0 ||
+        (used.length >= AppConstants.minCyclesForPrediction &&
+            (stdev > AppConstants.irregularityThresholdDays || cv > 0.18));
 
-    // Confidence drops with fewer samples and rising stdev
+    final luteal = _learnedLutealLength(
+      cyclesNewestFirst: cyclesNewestFirst,
+      logs: logs,
+      age: age,
+    );
+
     int confidence;
-    if (lengths.isEmpty) {
-      confidence = 30;
+    if (used.isEmpty) {
+      confidence = startSpanDays > 0 ? 22 : 28;
     } else {
-      final sampleScore = (lengths.length / 6).clamp(0, 1) * 60;
-      final stabilityScore =
-          (1 - (stdev / 14).clamp(0, 1).toDouble()) * 40;
-      confidence = (sampleScore + stabilityScore).round().clamp(20, 99);
+      final sampleScore =
+          (used.length / AppConstants.maxCyclesForAverage).clamp(0, 1) * 45;
+      final stabilityScore = (1 - (stdev / 12).clamp(0, 1).toDouble()) * 40;
+      final recencyBoost = used.length >= 3 ? 8 : 0;
+      confidence =
+          (sampleScore + stabilityScore + recencyBoost).round().clamp(18, 96);
+      if (isIrregular) confidence = (confidence * 0.85).round().clamp(18, 88);
+      if (startSpanDays > 0) {
+        confidence = (confidence * 0.8).round().clamp(15, 80);
+      }
     }
 
-    final nextPeriodStart = lastStart.add(Duration(days: avgCycle));
-    final nextPeriodEnd =
-        nextPeriodStart.add(Duration(days: avgPeriod - 1));
+    // Anchor on the midpoint when she only knew a start range.
+    final midLast = lastStart.add(Duration(days: startSpanDays ~/ 2));
+    var nextPeriodStart = midLast.add(Duration(days: avgCycle));
+    var isLate = false;
+    if (nextPeriodStart.isBefore(today)) {
+      isLate = true;
+      confidence = (confidence * 0.7).round().clamp(15, 70);
+    }
 
-    // Ovulation ≈ next period start − 14 days (luteal phase length)
-    final ovulationDay =
-        nextPeriodStart.subtract(const Duration(days: 14));
+    final pad = isIrregular
+        ? math.max(2, (stdev * 0.9).round().clamp(2, 7))
+        : math.max(0, (stdev * 0.5).round().clamp(0, 2));
+
+    // If last period was a date range, the next one is that same window shifted.
+    final earliest = startSpanDays > 0
+        ? lastStart.add(Duration(days: avgCycle))
+        : nextPeriodStart.subtract(Duration(days: pad));
+    final latest = startSpanDays > 0
+        ? lastStartLatest.add(Duration(days: avgCycle))
+        : nextPeriodStart.add(Duration(days: pad));
+
+    final nextPeriodEnd = nextPeriodStart.add(Duration(days: avgPeriod - 1));
+    final ovulationDay = nextPeriodStart.subtract(Duration(days: luteal));
+    final fertilePad = (isIrregular || startSpanDays > 0) ? 1 : 0;
     final fertileWindowStart =
-        ovulationDay.subtract(const Duration(days: 5));
-    final fertileWindowEnd = ovulationDay.add(const Duration(days: 1));
+        ovulationDay.subtract(Duration(days: 5 + fertilePad));
+    final fertileWindowEnd = ovulationDay.add(Duration(days: 1 + fertilePad));
 
     return CyclePrediction(
       nextPeriodStart: _stripTime(nextPeriodStart),
@@ -84,6 +133,10 @@ class PredictionEngine {
       averagePeriodLength: avgPeriod,
       isIrregular: isIrregular,
       confidence: confidence,
+      earliestPeriodStart: _stripTime(earliest),
+      latestPeriodStart: _stripTime(latest),
+      lutealLength: luteal,
+      isLate: isLate,
     );
   }
 
@@ -95,7 +148,6 @@ class PredictionEngine {
   }) {
     final d = _stripTime(day);
 
-    // 1. Was this day in any logged period?
     for (final c in cyclesNewestFirst) {
       final start = _stripTime(c.startDate);
       final end = start.add(Duration(days: c.periodLength - 1));
@@ -104,32 +156,111 @@ class PredictionEngine {
 
     if (prediction == null) return CyclePhase.unknown;
 
-    // 2. Predicted next period
-    if (!d.isBefore(prediction.nextPeriodStart) &&
-        !d.isAfter(prediction.nextPeriodEnd)) {
+    final periodStart = prediction.predictedRangeDays > 0
+        ? prediction.earliestPeriodStart
+        : prediction.nextPeriodStart;
+    final periodEnd = prediction.predictedRangeDays > 0
+        ? prediction.latestPeriodStart
+            .add(Duration(days: prediction.averagePeriodLength - 1))
+        : prediction.nextPeriodEnd;
+    if (!d.isBefore(periodStart) && !d.isAfter(periodEnd)) {
       return CyclePhase.predicted;
     }
 
-    // 3. Ovulation / fertile window
     if (_sameDay(d, prediction.ovulationDay)) return CyclePhase.ovulation;
     if (!d.isBefore(prediction.fertileWindowStart) &&
         !d.isAfter(prediction.fertileWindowEnd)) {
       return CyclePhase.fertile;
     }
 
-    // 4. Otherwise classify by current-cycle position
     if (cyclesNewestFirst.isNotEmpty) {
       final last = cyclesNewestFirst.first;
       final lastStart = _stripTime(last.startDate);
       final dayInCycle = d.difference(lastStart).inDays;
       if (dayInCycle >= 0 && dayInCycle < prediction.averageCycleLength) {
-        if (dayInCycle < prediction.averageCycleLength ~/ 2) {
-          return CyclePhase.follicular;
-        }
+        final ovuOffset =
+            prediction.averageCycleLength - prediction.lutealLength;
+        if (dayInCycle < ovuOffset - 1) return CyclePhase.follicular;
         return CyclePhase.luteal;
       }
     }
     return CyclePhase.unknown;
+  }
+
+  /// Exponential-decay mean so the most recent cycle counts most.
+  static double _weightedMean(List<int> newestFirst) {
+    if (newestFirst.isEmpty) return 0;
+    var num = 0.0;
+    var den = 0.0;
+    for (var i = 0; i < newestFirst.length; i++) {
+      final w = math.pow(0.82, i).toDouble();
+      num += newestFirst[i] * w;
+      den += w;
+    }
+    return num / den;
+  }
+
+  /// Drops values more than 2.5 median-absolute-deviations from the median.
+  static List<int> _rejectOutliers(List<int> xs) {
+    if (xs.length < 4) return xs;
+    final sorted = [...xs]..sort();
+    final med = _median(sorted);
+    final deviations = sorted.map((x) => (x - med).abs()).toList()..sort();
+    final mad = _median(deviations);
+    if (mad == 0) return xs;
+    final kept =
+        xs.where((x) => (x - med).abs() <= 2.5 * mad * 1.4826).toList();
+    return kept.length >= 2 ? kept : xs;
+  }
+
+  static double _median(List<num> sorted) {
+    if (sorted.isEmpty) return 0;
+    final m = sorted.length ~/ 2;
+    if (sorted.length.isOdd) return sorted[m].toDouble();
+    return (sorted[m - 1] + sorted[m]) / 2;
+  }
+
+  /// Infer luteal length from OPK / ovulation-pain / egg-white mucus logs.
+  static int _learnedLutealLength({
+    required List<Cycle> cyclesNewestFirst,
+    required List<DailyLog> logs,
+    int? age,
+  }) {
+    const signs = {
+      'Ovulation pain',
+      'Positive OPK',
+      'Egg-white mucus',
+      'Mittelschmerz',
+    };
+    final luteals = <int>[];
+    for (final c in cyclesNewestFirst) {
+      if (c.cycleLength == null || c.cycleLength! <= 0) continue;
+      final start = _stripTime(c.startDate);
+      final nextStart = start.add(Duration(days: c.cycleLength!));
+      DateTime? ovu;
+      for (final log in logs) {
+        final d = _stripTime(log.date);
+        if (d.isBefore(start) || !d.isBefore(nextStart)) continue;
+        final hit = log.symptoms.any(signs.contains);
+        if (hit) {
+          if (ovu == null || d.isAfter(ovu)) ovu = d;
+        }
+      }
+      if (ovu != null) {
+        final luteal = nextStart.difference(ovu).inDays;
+        if (luteal >= AppConstants.minLutealLength &&
+            luteal <= AppConstants.maxLutealLength) {
+          luteals.add(luteal);
+        }
+      }
+    }
+
+    var base = AppConstants.defaultLutealLength;
+    if (age != null && age >= 40) base = 13;
+    if (luteals.isEmpty) return base;
+    final learned = _weightedMean(luteals).round();
+    return learned.clamp(
+        AppConstants.minLutealLength, AppConstants.maxLutealLength);
   }
 
   static double _stdev(List<int> xs) {
@@ -141,8 +272,7 @@ class PredictionEngine {
     return math.sqrt(variance);
   }
 
-  static DateTime _stripTime(DateTime d) =>
-      DateTime(d.year, d.month, d.day);
+  static DateTime _stripTime(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static bool _sameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;

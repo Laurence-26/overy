@@ -9,15 +9,15 @@ class GradientButton extends StatelessWidget {
   final bool loading;
   final double height;
 
-  const GradientButton({
+  GradientButton({
     super.key,
     required this.label,
     required this.onPressed,
-    this.gradient = AppColors.primaryGradient,
     this.icon,
     this.loading = false,
     this.height = 56,
-  });
+    Gradient? gradient,
+  }) : gradient = gradient ?? AppColors.primaryGradient;
 
   @override
   Widget build(BuildContext context) {
@@ -44,13 +44,12 @@ class GradientButton extends StatelessWidget {
             ),
             child: Center(
               child: loading
-                  ? const SizedBox(
+                  ? SizedBox(
                       height: 22,
                       width: 22,
                       child: CircularProgressIndicator(
                         strokeWidth: 2.5,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
                   : Row(
@@ -58,11 +57,11 @@ class GradientButton extends StatelessWidget {
                       children: [
                         if (icon != null) ...[
                           Icon(icon, color: Colors.white, size: 20),
-                          const SizedBox(width: 8),
+                          SizedBox(width: 8),
                         ],
                         Text(
                           label,
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: Colors.white,
                             fontSize: 16,
                             fontWeight: FontWeight.w600,

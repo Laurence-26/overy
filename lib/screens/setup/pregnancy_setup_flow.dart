@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/cycle_provider.dart';
 import '../../widgets/choice_tile.dart';
-import '../home/home_shell.dart';
 import 'setup_scaffold.dart';
 
 class PregnancySetupFlow extends StatefulWidget {
@@ -22,12 +21,12 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
 
   static const _accent = Color(0xFFA78BFA);
 
-  // Page 1 — pregnancy history
+  // Page 1 - pregnancy history
   int? _previousPregnancies;
-  // Page 2 — health
+  // Page 2 - health
   final Set<String> _conditions = {};
   bool? _takingVitamins;
-  // Page 3 — LMP or due date
+  // Page 3 - LMP or due date
   bool _useDueDate = false;
   DateTime? _lastPeriodDate;
   DateTime? _dueDate;
@@ -71,7 +70,6 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
     setState(() => _saving = true);
     final cycle = context.read<CycleProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
     final profile = cycle.profile;
 
     try {
@@ -89,10 +87,7 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
             .timeout(const Duration(seconds: 15));
       }
       if (!mounted) return;
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeShell()),
-        (_) => false,
-      );
+      Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text('Couldn\'t save: $e'),
@@ -107,12 +102,18 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
   @override
   Widget build(BuildContext context) {
     final titles = [
-      ('Is this your first pregnancy?',
-          'Knowing this helps us give you the right kind of guidance.'),
-      ('A bit about your health',
-          'Optional info — used only to personalize your journey.'),
-      ('When did your last period start?',
-          'Or share your due date if you already know it.'),
+      (
+        'Is this your first pregnancy?',
+        'Knowing this helps us give you the right kind of guidance.'
+      ),
+      (
+        'A bit about your health',
+        'Optional info - used only to personalize your journey.'
+      ),
+      (
+        'When did your last period start?',
+        'Or share your due date if you already know it.'
+      ),
     ];
 
     return SetupScaffold(
@@ -148,7 +149,7 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
           selected: _previousPregnancies == 0,
           onTap: () => setState(() => _previousPregnancies = 0),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         ChoiceTile(
           icon: Icons.child_friendly_rounded,
           label: 'I have one child',
@@ -156,7 +157,7 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
           selected: _previousPregnancies == 1,
           onTap: () => setState(() => _previousPregnancies = 1),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         ChoiceTile(
           icon: Icons.family_restroom_rounded,
           label: 'Two or more',
@@ -182,14 +183,14 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Any conditions we should know about?',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -212,15 +213,15 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 24),
-          const Text(
+          SizedBox(height: 24),
+          Text(
             'Are you taking prenatal vitamins?',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           ChoiceTile(
             icon: Icons.medication_rounded,
             label: 'Yes, daily',
@@ -228,7 +229,7 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
             selected: _takingVitamins == true,
             onTap: () => setState(() => _takingVitamins = true),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           ChoiceTile(
             icon: Icons.close_rounded,
             label: 'Not yet',
@@ -247,7 +248,7 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
       children: [
         // Toggle row
         Container(
-          padding: const EdgeInsets.all(4),
+          padding: EdgeInsets.all(4),
           decoration: BoxDecoration(
             color: Colors.white.withOpacity(0.7),
             borderRadius: BorderRadius.circular(16),
@@ -255,16 +256,18 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
           ),
           child: Row(
             children: [
-              Expanded(child: _toggle('Last period', !_useDueDate, () {
+              Expanded(
+                  child: _toggle('Last period', !_useDueDate, () {
                 setState(() => _useDueDate = false);
               })),
-              Expanded(child: _toggle('Due date', _useDueDate, () {
+              Expanded(
+                  child: _toggle('Due date', _useDueDate, () {
                 setState(() => _useDueDate = true);
               })),
             ],
           ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: 24),
         Material(
           color: Colors.transparent,
           child: InkWell(
@@ -283,8 +286,7 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
                       context: context,
                       initialDate: _lastPeriodDate ??
                           now.subtract(const Duration(days: 90)),
-                      firstDate:
-                          now.subtract(const Duration(days: 300)),
+                      firstDate: now.subtract(const Duration(days: 300)),
                       lastDate: now,
                     );
               if (picked != null) {
@@ -298,16 +300,14 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
               }
             },
             child: Container(
-              padding: const EdgeInsets.all(22),
+              padding: EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: _picked != null
                     ? _accent.withOpacity(0.10)
                     : Colors.white.withOpacity(0.7),
                 borderRadius: BorderRadius.circular(18),
                 border: Border.all(
-                  color: _picked != null
-                      ? _accent
-                      : _accent.withOpacity(0.25),
+                  color: _picked != null ? _accent : _accent.withOpacity(0.25),
                   width: _picked != null ? 2 : 1,
                 ),
               ),
@@ -319,12 +319,12 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
                           : Icons.calendar_today_rounded,
                       color: _accent,
                       size: 36),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   Text(
                     _picked == null
                         ? 'Tap to pick a date'
                         : DateFormat('EEEE, MMM d, yyyy').format(_picked!),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
@@ -346,7 +346,7 @@ class _PregnancySetupFlowState extends State<PregnancySetupFlow> {
       onTap: onTap,
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 220),
-        padding: const EdgeInsets.symmetric(vertical: 12),
+        padding: EdgeInsets.symmetric(vertical: 12),
         decoration: BoxDecoration(
           color: selected ? _accent : Colors.transparent,
           borderRadius: BorderRadius.circular(12),

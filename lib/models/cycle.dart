@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/json_dates.dart';
 
 /// A single completed or in-progress menstrual cycle.
 /// A cycle starts on the first day of a period and ends the day before the
@@ -6,6 +6,11 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 class Cycle {
   final String id;
   final DateTime startDate;
+
+  /// When she only knew a *range* for period start, the latest possible day.
+  /// Predictions then span [startDate + L, startDateLatest + L].
+  final DateTime? startDateLatest;
+
   final DateTime? endDate; // null while still active
   final int periodLength; // number of bleeding days
   final int? cycleLength; // total length in days, null until next cycle starts
@@ -13,6 +18,7 @@ class Cycle {
   const Cycle({
     required this.id,
     required this.startDate,
+    this.startDateLatest,
     this.endDate,
     required this.periodLength,
     this.cycleLength,
@@ -20,14 +26,32 @@ class Cycle {
 
   bool get isActive => endDate == null;
 
+  /// Inclusive days of uncertainty on when this period started (0 = exact).
+  int get startUncertaintyDays {
+    final latest = startDateLatest;
+    if (latest == null) return 0;
+    final a = DateTime(startDate.year, startDate.month, startDate.day);
+    final b = DateTime(latest.year, latest.month, latest.day);
+    final d = b.difference(a).inDays;
+    return d < 0 ? 0 : d;
+  }
+
+  bool get hasStartRange => startUncertaintyDays > 0;
+
   Cycle copyWith({
+    DateTime? startDate,
+    DateTime? startDateLatest,
+    bool clearStartDateLatest = false,
     DateTime? endDate,
     int? periodLength,
     int? cycleLength,
   }) {
     return Cycle(
       id: id,
-      startDate: startDate,
+      startDate: startDate ?? this.startDate,
+      startDateLatest: clearStartDateLatest
+          ? null
+          : (startDateLatest ?? this.startDateLatest),
       endDate: endDate ?? this.endDate,
       periodLength: periodLength ?? this.periodLength,
       cycleLength: cycleLength ?? this.cycleLength,
@@ -36,16 +60,18 @@ class Cycle {
 
   Map<String, dynamic> toMap() => {
         'id': id,
-        'startDate': Timestamp.fromDate(startDate),
-        'endDate': endDate == null ? null : Timestamp.fromDate(endDate!),
+        'startDate': JsonDates.encode(startDate),
+        'startDateLatest': JsonDates.encode(startDateLatest),
+        'endDate': JsonDates.encode(endDate),
         'periodLength': periodLength,
         'cycleLength': cycleLength,
       };
 
   factory Cycle.fromMap(Map<String, dynamic> m) => Cycle(
         id: m['id'] as String,
-        startDate: (m['startDate'] as Timestamp).toDate(),
-        endDate: (m['endDate'] as Timestamp?)?.toDate(),
+        startDate: JsonDates.decodeRequired(m['startDate']),
+        startDateLatest: JsonDates.decode(m['startDateLatest']),
+        endDate: JsonDates.decode(m['endDate']),
         periodLength: m['periodLength'] as int? ?? 5,
         cycleLength: m['cycleLength'] as int?,
       );

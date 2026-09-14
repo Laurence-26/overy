@@ -5,7 +5,6 @@ import 'package:provider/provider.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/cycle_provider.dart';
 import '../../widgets/choice_tile.dart';
-import '../home/home_shell.dart';
 import 'setup_scaffold.dart';
 
 class ConceptionSetupFlow extends StatefulWidget {
@@ -69,7 +68,6 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
     setState(() => _saving = true);
     final cycle = context.read<CycleProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
     final profile = cycle.profile;
 
     try {
@@ -88,10 +86,7 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
             .timeout(const Duration(seconds: 15));
       }
       if (!mounted) return;
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeShell()),
-        (_) => false,
-      );
+      Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text('Couldn\'t save: $e'),
@@ -106,12 +101,18 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
   @override
   Widget build(BuildContext context) {
     final titles = [
-      ('How are your cycles, usually?',
-          'This helps us tailor your high-chance days more accurately.'),
-      ('A bit about your health',
-          'Optional info — we use this only to personalize your guidance.'),
-      ('When did your last period start?',
-          'We need this to estimate your next high-chance window.'),
+      (
+        'How are your cycles, usually?',
+        'This helps us tailor your high-chance days more accurately.'
+      ),
+      (
+        'A bit about your health',
+        'Optional info - we use this only to personalize your guidance.'
+      ),
+      (
+        'When did your last period start?',
+        'We need this to estimate your next high-chance window.'
+      ),
     ];
 
     return SetupScaffold(
@@ -148,7 +149,7 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
           selected: _hasIrregularCycles == false,
           onTap: () => setState(() => _hasIrregularCycles = false),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         ChoiceTile(
           icon: Icons.timeline_rounded,
           label: 'Irregular',
@@ -175,14 +176,14 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'Any conditions we should know about?',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           Wrap(
             spacing: 8,
             runSpacing: 8,
@@ -205,15 +206,15 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
               );
             }).toList(),
           ),
-          const SizedBox(height: 24),
-          const Text(
+          SizedBox(height: 24),
+          Text(
             'Are you taking prenatal vitamins?',
             style: TextStyle(
               color: AppColors.textPrimary,
               fontWeight: FontWeight.w600,
             ),
           ),
-          const SizedBox(height: 12),
+          SizedBox(height: 12),
           ChoiceTile(
             icon: Icons.medication_rounded,
             label: 'Yes, daily',
@@ -221,7 +222,7 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
             selected: _takingVitamins == true,
             onTap: () => setState(() => _takingVitamins = true),
           ),
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           ChoiceTile(
             icon: Icons.close_rounded,
             label: 'Not yet',
@@ -246,8 +247,7 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
               final picked = await showDatePicker(
                 context: context,
                 initialDate: _lastPeriodDate ?? DateTime.now(),
-                firstDate:
-                    DateTime.now().subtract(const Duration(days: 365)),
+                firstDate: DateTime.now().subtract(const Duration(days: 365)),
                 lastDate: DateTime.now(),
               );
               if (picked != null) {
@@ -255,7 +255,7 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
               }
             },
             child: Container(
-              padding: const EdgeInsets.all(22),
+              padding: EdgeInsets.all(22),
               decoration: BoxDecoration(
                 color: _lastPeriodDate != null
                     ? _accent.withOpacity(0.10)
@@ -271,15 +271,14 @@ class _ConceptionSetupFlowState extends State<ConceptionSetupFlow> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  const Icon(Icons.calendar_today_rounded,
-                      color: _accent, size: 36),
-                  const SizedBox(height: 12),
+                  Icon(Icons.calendar_today_rounded, color: _accent, size: 36),
+                  SizedBox(height: 12),
                   Text(
                     _lastPeriodDate == null
                         ? 'Tap to pick a date'
                         : DateFormat('EEEE, MMM d, yyyy')
                             .format(_lastPeriodDate!),
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: AppColors.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,

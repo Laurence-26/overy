@@ -1,9 +1,8 @@
-import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'app.dart';
-import 'firebase_options.dart';
+import 'services/local_store.dart';
 import 'services/notification_service.dart';
 
 Future<void> main() async {
@@ -13,15 +12,7 @@ Future<void> main() async {
     statusBarIconBrightness: Brightness.dark,
   ));
 
-  try {
-    await Firebase.initializeApp(
-      options: DefaultFirebaseOptions.currentPlatform,
-    );
-  } catch (e) {
-    // Firebase config is still placeholder — the UI runs but auth/storage fail.
-    debugPrint('Firebase init skipped: $e');
-  }
-
+  await LocalStore.instance.ready();
   await NotificationService.instance.init();
 
   runApp(const CyclusApp());

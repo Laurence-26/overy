@@ -1,9 +1,11 @@
+import '../models/tracking_mode.dart';
+
 /// App-wide constants and default values.
 class AppConstants {
   AppConstants._();
 
   static const String appName = 'Cyclus';
-  static const String appTagline = 'Your cycle, beautifully tracked';
+  static const String appTagline = 'Your cycle, beautifully tracked - offline';
 
   // Cycle defaults
   static const int defaultCycleLength = 28;
@@ -14,47 +16,58 @@ class AppConstants {
   static const int maxPeriodLength = 10;
 
   // History needed for irregular cycle detection
-  static const int irregularityThresholdDays = 7;
+  static const int irregularityThresholdDays = 6;
   static const int minCyclesForPrediction = 2;
-  static const int maxCyclesForAverage = 6;
+  static const int maxCyclesForAverage = 12;
+  static const int defaultLutealLength = 14;
+  static const int minLutealLength = 10;
+  static const int maxLutealLength = 16;
 
-  // Notification IDs — one per (phase, lead-day) pair so they don't overwrite.
-  // Period lead-up: 3 days, 2 days, 1 day before next predicted period.
+  // Notification IDs - one per (phase, lead-day) pair so they don't overwrite.
   static const int notifPeriod3Days = 1001;
   static const int notifPeriod2Days = 1002;
   static const int notifPeriod1Day = 1003;
+  static const int notifPeriodToday = 1004;
+  static const int notifPeriodLate = 1005;
 
-  // Fertile window lead-up: 3 days, 2 days, 1 day before window starts.
   static const int notifFertile3Days = 1011;
   static const int notifFertile2Days = 1012;
   static const int notifFertile1Day = 1013;
+  static const int notifOvulation = 1014;
 
-  // Pregnancy trimester lead-up (single reminder 3 days before).
   static const int notifTrimester = 1101;
+  static const int notifPregnancyWeekly = 1102;
 
-  // Daily nudge to log how you're feeling.
   static const int notifLogReminder = 1200;
+  static const int notifVitamins = 1201;
 
-  // Reserved for the "Test notification" button.
   static const int notifTest = 9999;
 
-  /// All scheduled phase reminders — useful when toggling notifs off.
+  /// All scheduled phase reminders - useful when toggling notifs off.
   static const List<int> notifAllPhaseIds = [
     notifPeriod3Days,
     notifPeriod2Days,
     notifPeriod1Day,
+    notifPeriodToday,
+    notifPeriodLate,
     notifFertile3Days,
     notifFertile2Days,
     notifFertile1Day,
+    notifOvulation,
     notifTrimester,
+    notifPregnancyWeekly,
+    notifVitamins,
   ];
 
-  // Storage keys
   static const String prefsOnboardingComplete = 'onboarding_complete';
   static const String prefsNotificationsEnabled = 'notifications_enabled';
+
+  static const String storeAccounts = 'cyclus.accounts';
+  static const String storeSession = 'cyclus.session_uid';
+  static const String storeShareCodes = 'cyclus.share_codes';
 }
 
-/// Symptom categories shown in daily log.
+/// Symptom categories shown in daily log - tailored per tracking mode.
 class Symptoms {
   Symptoms._();
 
@@ -67,6 +80,27 @@ class Symptoms {
     'Fatigue',
     'Acne',
     'Nausea',
+  ];
+
+  static const List<String> fertilitySigns = [
+    'Ovulation pain',
+    'Egg-white mucus',
+    'Positive OPK',
+    'High libido',
+    'Mittelschmerz',
+  ];
+
+  static const List<String> pregnancyPhysical = [
+    'Nausea',
+    'Heartburn',
+    'Swelling',
+    'Backache',
+    'Fatigue',
+    'Cravings',
+    'Baby kicks',
+    'Braxton Hicks',
+    'Headache',
+    'Insomnia',
   ];
 
   static const List<String> moods = [
@@ -86,4 +120,12 @@ class Symptoms {
     'Medium',
     'Heavy',
   ];
+
+  static List<String> physicalFor(TrackingMode? mode) => switch (mode) {
+        TrackingMode.pregnancy => pregnancyPhysical,
+        TrackingMode.conception => [...physical, ...fertilitySigns],
+        _ => physical,
+      };
+
+  static bool showsFlow(TrackingMode? mode) => mode != TrackingMode.pregnancy;
 }

@@ -6,11 +6,22 @@ import '../../core/theme/app_colors.dart';
 import '../../models/cycle_prediction.dart';
 import '../../models/tracking_mode.dart';
 import '../../providers/cycle_provider.dart';
+import '../../services/personalization_service.dart';
 import '../../widgets/cycle_ring.dart';
 import '../../widgets/phase_legend.dart';
 import '../../widgets/stat_card.dart';
+import '../../widgets/surface_panel.dart';
 import '../log/log_period_sheet.dart';
 import '../day_detail_screen.dart';
+
+String _firstName(CycleProvider cycle) {
+  final raw = (cycle.profile?.username ??
+          cycle.profile?.displayName ??
+          'there')
+      .trim();
+  if (raw.isEmpty) return 'there';
+  return raw.split(RegExp(r'\s+')).first;
+}
 
 class TodayTab extends StatelessWidget {
   const TodayTab({super.key});
@@ -36,9 +47,7 @@ class _PeriodTodayView extends StatelessWidget {
     final cycle = context.watch<CycleProvider>();
     final p = cycle.prediction;
     final phase = cycle.phaseFor(DateTime.now());
-    final name = cycle.profile?.username ??
-        cycle.profile?.displayName?.split(' ').first ??
-        'there';
+    final name = _firstName(cycle);
 
     final phaseLabel = switch (phase) {
       CyclePhase.period => 'Period',
@@ -47,7 +56,7 @@ class _PeriodTodayView extends StatelessWidget {
       CyclePhase.predicted => 'Predicted',
       CyclePhase.follicular => 'Follicular',
       CyclePhase.luteal => 'Luteal',
-      CyclePhase.unknown => '—',
+      CyclePhase.unknown => '-',
     };
     final phaseColor = switch (phase) {
       CyclePhase.period => AppColors.period,
@@ -62,26 +71,27 @@ class _PeriodTodayView extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _Header(name: name, phaseLabel: phaseLabel, phaseColor: phaseColor),
-            const SizedBox(height: 28),
+            SizedBox(height: 16),
+            const _PersonalizedTip(),
+            SizedBox(height: 20),
             Center(
-              child: CycleRing(
-                  currentCycle: cycle.currentCycle, prediction: p),
+              child: CycleRing(currentCycle: cycle.currentCycle, prediction: p),
             ),
-            const SizedBox(height: 18),
-            const Center(child: PhaseLegend()),
-            const SizedBox(height: 24),
-            // One-tap "period started today" — closes the open cycle (if any)
+            SizedBox(height: 18),
+            Center(child: PhaseLegend(mode: TrackingMode.period)),
+            SizedBox(height: 24),
+            // One-tap "period started today" - closes the open cycle (if any)
             // and starts a fresh one beginning today.
             _PeriodStartedTodayBanner(
-              hasActiveToday: phase == CyclePhase.period &&
-                  cycle.currentCycle != null,
+              hasActiveToday:
+                  phase == CyclePhase.period && cycle.currentCycle != null,
             ),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Row(
               children: [
                 Expanded(
@@ -92,7 +102,7 @@ class _PeriodTodayView extends StatelessWidget {
                     onTap: () => showLogPeriodSheet(context),
                   ),
                 ),
-                const SizedBox(width: 12),
+                SizedBox(width: 12),
                 Expanded(
                   child: _ActionTile(
                     icon: Icons.edit_note_rounded,
@@ -105,7 +115,7 @@ class _PeriodTodayView extends StatelessWidget {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             if (p != null) ...[
               Row(
                 children: [
@@ -118,7 +128,7 @@ class _PeriodTodayView extends StatelessWidget {
                       color: AppColors.accent,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
                       icon: Icons.water_drop_outlined,
@@ -129,7 +139,7 @@ class _PeriodTodayView extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -137,18 +147,21 @@ class _PeriodTodayView extends StatelessWidget {
                       icon: Icons.eco_rounded,
                       label: 'Fertile window',
                       value:
-                          '${DateFormat('MMM d').format(p.fertileWindowStart)} – ${DateFormat('MMM d').format(p.fertileWindowEnd)}',
+                          '${DateFormat('MMM d').format(p.fertileWindowStart)} - ${DateFormat('MMM d').format(p.fertileWindowEnd)}',
                       color: AppColors.fertile,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
                       icon: Icons.verified_rounded,
                       label: 'Confidence',
                       value: '${p.confidence}%',
-                      subtitle:
-                          p.isIrregular ? 'Adaptive' : 'Based on history',
+                      subtitle: p.isLate
+                          ? 'Period looks late'
+                          : p.predictedRangeDays > 0
+                              ? 'Likely ${DateFormat('MMM d').format(p.earliestPeriodStart)}-${DateFormat('MMM d').format(p.latestPeriodStart)}'
+                              : 'Based on your history',
                       color: AppColors.ovulation,
                     ),
                   ),
@@ -172,9 +185,7 @@ class _ConceptionTodayView extends StatelessWidget {
     final cycle = context.watch<CycleProvider>();
     final p = cycle.prediction;
     final phase = cycle.phaseFor(DateTime.now());
-    final name = cycle.profile?.username ??
-        cycle.profile?.displayName?.split(' ').first ??
-        'there';
+    final name = _firstName(cycle);
 
     final phaseLabel = switch (phase) {
       CyclePhase.period => 'Period',
@@ -183,7 +194,7 @@ class _ConceptionTodayView extends StatelessWidget {
       CyclePhase.predicted => 'Period coming',
       CyclePhase.follicular => 'Building up',
       CyclePhase.luteal => 'Waiting',
-      CyclePhase.unknown => '—',
+      CyclePhase.unknown => '-',
     };
     final phaseColor = switch (phase) {
       CyclePhase.fertile || CyclePhase.ovulation => AppColors.fertile,
@@ -194,25 +205,26 @@ class _ConceptionTodayView extends StatelessWidget {
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _Header(name: name, phaseLabel: phaseLabel, phaseColor: phaseColor),
-            const SizedBox(height: 28),
+            SizedBox(height: 16),
+            const _PersonalizedTip(),
+            SizedBox(height: 20),
             Center(
-              child: CycleRing(
-                  currentCycle: cycle.currentCycle, prediction: p),
+              child: CycleRing(currentCycle: cycle.currentCycle, prediction: p),
             ),
-            const SizedBox(height: 18),
-            const Center(child: PhaseLegend()),
-            const SizedBox(height: 28),
+            SizedBox(height: 18),
+            Center(child: PhaseLegend(mode: TrackingMode.conception)),
+            SizedBox(height: 28),
             if (p != null) ...[
               Container(
                 width: double.infinity,
-                padding: const EdgeInsets.all(20),
+                padding: EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  gradient: const LinearGradient(
+                  gradient: LinearGradient(
                     colors: [Color(0xFFC8E6DC), Color(0xFF8AC8B8)],
                   ),
                   borderRadius: BorderRadius.circular(22),
@@ -220,7 +232,7 @@ class _ConceptionTodayView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Text(
+                    Text(
                       'Your high chance window',
                       style: TextStyle(
                         color: Colors.white,
@@ -228,17 +240,17 @@ class _ConceptionTodayView extends StatelessWidget {
                         fontSize: 13,
                       ),
                     ),
-                    const SizedBox(height: 6),
+                    SizedBox(height: 6),
                     Text(
-                      '${DateFormat('MMM d').format(p.fertileWindowStart)} → ${DateFormat('MMM d').format(p.fertileWindowEnd)}',
-                      style: const TextStyle(
+                      '${DateFormat('MMM d').format(p.fertileWindowStart)} > ${DateFormat('MMM d').format(p.fertileWindowEnd)}',
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 22,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 4),
-                    const Text(
+                    SizedBox(height: 4),
+                    Text(
                       'These are your most likely days to conceive. Being intimate during this window gives the best chance.',
                       style: TextStyle(
                         color: Colors.white,
@@ -249,7 +261,7 @@ class _ConceptionTodayView extends StatelessWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
               Row(
                 children: [
                   Expanded(
@@ -261,19 +273,24 @@ class _ConceptionTodayView extends StatelessWidget {
                       color: AppColors.ovulation,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
                       icon: Icons.water_drop_outlined,
-                      label: 'Next period',
-                      value: DateFormat('MMM d').format(p.nextPeriodStart),
+                      label: p.predictedRangeDays > 0
+                          ? 'Likely period'
+                          : 'Next period',
+                      value: p.predictedRangeDays > 0
+                          ? '${DateFormat('MMM d').format(p.earliestPeriodStart)}-${DateFormat('MMM d').format(p.latestPeriodStart)}'
+                          : DateFormat('MMM d').format(p.nextPeriodStart),
                       color: AppColors.period,
                     ),
                   ),
                 ],
               ),
             ] else
-              _firstRunHint('Log your last period to see your high-chance days.'),
+              _firstRunHint(
+                  'Log your last period to see your high-chance days.'),
           ],
         ),
       ),
@@ -289,26 +306,29 @@ class _PregnancyTodayView extends StatelessWidget {
   Widget build(BuildContext context) {
     final cycle = context.watch<CycleProvider>();
     final preg = cycle.pregnancyStatus;
-    final name = cycle.profile?.username ??
-        cycle.profile?.displayName?.split(' ').first ??
-        'there';
+    final name = _firstName(cycle);
 
     return SafeArea(
       bottom: false,
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 12, 20, 100),
+        padding: EdgeInsets.fromLTRB(20, 12, 20, 120),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             _Header(
               name: name,
-              phaseLabel: preg?.trimesterLabel ?? '—',
+              phaseLabel: preg?.trimesterLabel ?? '-',
               phaseColor: AppColors.accent,
             ),
-            const SizedBox(height: 28),
-            Center(child: _PregnancyRing(progress: preg?.progress ?? 0,
-                weeks: preg?.weeksAlong, daysIntoWeek: preg?.daysIntoWeek)),
-            const SizedBox(height: 28),
+            SizedBox(height: 16),
+            const _PersonalizedTip(),
+            SizedBox(height: 20),
+            Center(
+                child: _PregnancyRing(
+                    progress: preg?.progress ?? 0,
+                    weeks: preg?.weeksAlong,
+                    daysIntoWeek: preg?.daysIntoWeek)),
+            SizedBox(height: 28),
             if (preg != null) ...[
               Row(
                 children: [
@@ -317,13 +337,12 @@ class _PregnancyTodayView extends StatelessWidget {
                       icon: Icons.eco_rounded,
                       label: 'Next trimester',
                       value: preg.nextTrimesterStart != null
-                          ? DateFormat('MMM d')
-                              .format(preg.nextTrimesterStart!)
+                          ? DateFormat('MMM d').format(preg.nextTrimesterStart!)
                           : 'You\'re there!',
                       color: AppColors.fertile,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
                       icon: Icons.event_available_rounded,
@@ -335,7 +354,7 @@ class _PregnancyTodayView extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               const _BabyKicksCard(),
             ] else
               _firstRunHint(
@@ -370,14 +389,14 @@ class _PregnancyRing extends StatelessWidget {
               value: progress,
               strokeWidth: 18,
               backgroundColor: AppColors.accentLight.withOpacity(0.35),
-              valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+              valueColor: AlwaysStoppedAnimation(AppColors.accent),
               strokeCap: StrokeCap.round,
             ),
           ),
           Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
+              Text(
                 'WEEK',
                 style: TextStyle(
                   color: AppColors.textSecondary,
@@ -386,22 +405,22 @@ class _PregnancyRing extends StatelessWidget {
                   letterSpacing: 1,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text(
-                weeks?.toString() ?? '—',
-                style: const TextStyle(
+                weeks?.toString() ?? '-',
+                style: TextStyle(
                   color: AppColors.accent,
                   fontSize: 64,
                   fontWeight: FontWeight.w700,
                   height: 1,
                 ),
               ),
-              const SizedBox(height: 6),
+              SizedBox(height: 6),
               Text(
                 weeks == null
                     ? 'Set due date to begin'
                     : '${daysIntoWeek}d into week $weeks',
-                style: const TextStyle(
+                style: TextStyle(
                   color: AppColors.textTertiary,
                   fontSize: 12,
                 ),
@@ -421,9 +440,9 @@ class _BabyKicksCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cycle = context.watch<CycleProvider>();
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           colors: [Color(0xFFFFC4D6), Color(0xFFFFB3CC)],
         ),
         borderRadius: BorderRadius.circular(22),
@@ -437,15 +456,15 @@ class _BabyKicksCard extends StatelessWidget {
               shape: BoxShape.circle,
               color: Colors.white.withOpacity(0.3),
             ),
-            child: const Icon(Icons.child_friendly_rounded,
+            child: Icon(Icons.child_friendly_rounded,
                 color: Colors.white, size: 30),
           ),
-          const SizedBox(width: 16),
+          SizedBox(width: 16),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   'Baby kicks today',
                   style: TextStyle(
                     color: Colors.white,
@@ -455,7 +474,7 @@ class _BabyKicksCard extends StatelessWidget {
                 ),
                 Text(
                   '${cycle.todayKicks}',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontSize: 28,
                     fontWeight: FontWeight.w700,
@@ -477,21 +496,21 @@ class _BabyKicksCard extends StatelessWidget {
               await cycle.logBabyKick();
               if (context.mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Kick logged 👶'),
+                  SnackBar(
+                    content: Text('Kick logged'),
                     duration: Duration(seconds: 1),
                   ),
                 );
               }
             },
             child: Container(
-              padding: const EdgeInsets.all(14),
+              padding: EdgeInsets.all(14),
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
                 color: Colors.white.withOpacity(0.95),
               ),
-              child: const Icon(Icons.add_rounded,
-                  color: AppColors.primary, size: 28),
+              child:
+                  Icon(Icons.add_rounded, color: AppColors.primary, size: 28),
             ),
           ),
         ],
@@ -500,27 +519,71 @@ class _BabyKicksCard extends StatelessWidget {
   }
 }
 
-Widget _firstRunHint(String text) => Container(
+Widget _firstRunHint(String text) => SurfacePanel(
+      tint: AppColors.primary,
       padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: AppColors.surfaceAlt,
-        borderRadius: BorderRadius.circular(20),
-      ),
       child: Row(
         children: [
-          const Icon(Icons.info_outline,
-              color: AppColors.primary, size: 28),
+          Icon(Icons.info_outline, color: AppColors.primary, size: 28),
           const SizedBox(width: 12),
           Expanded(
             child: Text(
               text,
-              style: const TextStyle(
-                  color: AppColors.textSecondary, height: 1.4),
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                height: 1.4,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ),
         ],
       ),
     );
+
+class _PersonalizedTip extends StatelessWidget {
+  const _PersonalizedTip();
+
+  @override
+  Widget build(BuildContext context) {
+    final cycle = context.watch<CycleProvider>();
+    final mode = cycle.trackingMode ?? TrackingMode.period;
+    final tip = PersonalizationService.todayTip(
+      profile: cycle.profile,
+      mode: mode,
+      phase: cycle.phaseFor(DateTime.now()),
+      pregnancy: cycle.pregnancyStatus,
+      recentLogs: cycle.allLogs,
+    );
+    final color = switch (mode) {
+      TrackingMode.period => AppColors.primary,
+      TrackingMode.conception => AppColors.fertile,
+      TrackingMode.pregnancy => AppColors.accent,
+    };
+    return SurfacePanel(
+      tint: color,
+      padding: const EdgeInsets.all(16),
+      opacity: 0.58,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.auto_awesome_rounded, color: color, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              tip,
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                height: 1.45,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
 
 // Shared
 class _Header extends StatelessWidget {
@@ -536,45 +599,65 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                DateFormat('EEEE, MMM d').format(DateTime.now()),
-                style: const TextStyle(
-                    color: AppColors.textSecondary, fontSize: 13),
-              ),
-              const SizedBox(height: 2),
-              Text(
-                'Hi, $name 🌸',
-                style: const TextStyle(
-                  color: AppColors.textPrimary,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w700,
+    return SurfacePanel(
+      padding: const EdgeInsets.fromLTRB(16, 14, 14, 14),
+      elevated: true,
+      opacity: 0.6,
+      tint: phaseColor,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  DateFormat('EEEE, MMM d').format(DateTime.now()),
+                  style: TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
-          ),
-        ),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-          decoration: BoxDecoration(
-            color: phaseColor.withOpacity(0.18),
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            phaseLabel,
-            style: TextStyle(
-              color: phaseColor,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+                const SizedBox(height: 2),
+                Text(
+                  'Hi, $name',
+                  style: TextStyle(
+                    color: AppColors.textPrimary,
+                    fontSize: 26,
+                    fontWeight: FontWeight.w800,
+                    height: 1.15,
+                  ),
+                ),
+              ],
             ),
           ),
-        ),
-      ],
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: phaseColor,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: phaseColor.withOpacity(0.45),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+              border: Border.all(
+                  color: Colors.white.withOpacity(0.55), width: 1.5),
+            ),
+            child: Text(
+              phaseLabel,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 13,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.2,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -594,31 +677,27 @@ class _ActionTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          padding: const EdgeInsets.symmetric(vertical: 18),
-          decoration: BoxDecoration(
-            color: color.withOpacity(0.10),
-            borderRadius: BorderRadius.circular(18),
-          ),
-          child: Column(
-            children: [
-              Icon(icon, color: color, size: 26),
-              const SizedBox(height: 8),
-              Text(
-                label,
-                style: TextStyle(
-                  color: color,
-                  fontWeight: FontWeight.w600,
-                  fontSize: 13,
-                ),
+    return SurfacePanel(
+      tint: color,
+      padding: EdgeInsets.zero,
+      onTap: onTap,
+      opacity: 0.58,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 18),
+        child: Column(
+          children: [
+            Icon(icon, color: color, size: 26),
+            const SizedBox(height: 8),
+            Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: AppColors.textPrimary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
@@ -643,18 +722,18 @@ class _PeriodStartedTodayBannerState extends State<_PeriodStartedTodayBanner> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Start a new period today?'),
-        content: const Text(
+        title: Text('Start a new period today?'),
+        content: Text(
           'This will close your current cycle and start a fresh one beginning today.',
         ),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.of(ctx).pop(true),
-            child: const Text('Start today'),
+            child: Text('Start today'),
           ),
         ],
       ),
@@ -668,8 +747,8 @@ class _PeriodStartedTodayBannerState extends State<_PeriodStartedTodayBanner> {
       await cycle
           .startPeriod(DateTime.now())
           .timeout(const Duration(seconds: 15));
-      messenger.showSnackBar(const SnackBar(
-        content: Text('New period started today 🌸'),
+      messenger.showSnackBar(SnackBar(
+        content: Text('New period started today'),
         backgroundColor: AppColors.success,
         duration: Duration(seconds: 2),
       ));
@@ -692,65 +771,62 @@ class _PeriodStartedTodayBannerState extends State<_PeriodStartedTodayBanner> {
         ? 'Tap to start a fresh cycle if this is a new period.'
         : 'Tap to log today as your new period start.';
 
-    return Material(
-      color: AppColors.period.withOpacity(0.10),
-      borderRadius: BorderRadius.circular(18),
-      child: InkWell(
-        borderRadius: BorderRadius.circular(18),
-        onTap: _saving ? null : () => _confirm(context),
-        child: Padding(
-          padding: const EdgeInsets.all(16),
-          child: Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.period.withOpacity(0.18),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.water_drop_rounded,
-                    color: AppColors.period),
+    return SurfacePanel(
+      tint: AppColors.period,
+      padding: EdgeInsets.zero,
+      onTap: _saving ? null : () => _confirm(context),
+      borderColor: AppColors.period.withOpacity(0.35),
+      opacity: 0.6,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Row(
+          children: [
+            Container(
+              width: 46,
+              height: 46,
+              decoration: BoxDecoration(
+                color: AppColors.period.withOpacity(0.18),
+                shape: BoxShape.circle,
               ),
-              const SizedBox(width: 14),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      label,
-                      style: const TextStyle(
-                        color: AppColors.textPrimary,
-                        fontSize: 15,
-                        fontWeight: FontWeight.w700,
-                      ),
+              child: Icon(Icons.water_drop_rounded, color: AppColors.period),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      color: AppColors.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
                     ),
-                    const SizedBox(height: 2),
-                    Text(
-                      subtitle,
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              if (_saving)
-                const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2.5,
-                    valueColor:
-                        AlwaysStoppedAnimation<Color>(AppColors.period),
                   ),
-                )
-              else
-                const Icon(Icons.arrow_forward_rounded,
-                    color: AppColors.period),
-            ],
-          ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: TextStyle(
+                      color: AppColors.textSecondary,
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            if (_saving)
+              SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2.5,
+                  valueColor: AlwaysStoppedAnimation<Color>(AppColors.period),
+                ),
+              )
+            else
+              Icon(Icons.arrow_forward_rounded, color: AppColors.period),
+          ],
         ),
       ),
     );

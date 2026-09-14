@@ -30,11 +30,11 @@ class _LogPeriodSheetState extends State<_LogPeriodSheet> {
   @override
   Widget build(BuildContext context) {
     final cycle = context.watch<CycleProvider>();
-    final active = cycle.currentCycle != null &&
-        cycle.currentCycle!.cycleLength == null;
+    final active =
+        cycle.currentCycle != null && cycle.currentCycle!.cycleLength == null;
 
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
       ),
@@ -42,7 +42,7 @@ class _LogPeriodSheetState extends State<_LogPeriodSheet> {
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(24, 12, 24, 32),
+        padding: EdgeInsets.fromLTRB(24, 12, 24, 32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -57,25 +57,25 @@ class _LogPeriodSheetState extends State<_LogPeriodSheet> {
                 ),
               ),
             ),
-            const SizedBox(height: 18),
+            SizedBox(height: 18),
             Text(
               _isEnding ? 'End your period' : 'Log your period',
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 4),
+            SizedBox(height: 4),
             Text(
               _isEnding
                   ? 'When did your period end?'
                   : 'When did your period start?',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             // Date picker tile
             Material(
               color: AppColors.surfaceAlt,
@@ -86,8 +86,8 @@ class _LogPeriodSheetState extends State<_LogPeriodSheet> {
                   final picked = await showDatePicker(
                     context: context,
                     initialDate: _startDate,
-                    firstDate: DateTime.now()
-                        .subtract(const Duration(days: 365)),
+                    firstDate:
+                        DateTime.now().subtract(const Duration(days: 365)),
                     lastDate: DateTime.now(),
                   );
                   if (picked != null) {
@@ -95,24 +95,24 @@ class _LogPeriodSheetState extends State<_LogPeriodSheet> {
                   }
                 },
                 child: Padding(
-                  padding: const EdgeInsets.all(18),
+                  padding: EdgeInsets.all(18),
                   child: Row(
                     children: [
-                      const Icon(Icons.calendar_today_rounded,
+                      Icon(Icons.calendar_today_rounded,
                           color: AppColors.primary),
-                      const SizedBox(width: 14),
+                      SizedBox(width: 14),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('Date',
+                            Text('Date',
                                 style: TextStyle(
                                     color: AppColors.textSecondary,
                                     fontSize: 12)),
-                            const SizedBox(height: 2),
+                            SizedBox(height: 2),
                             Text(
                               DateFormat('EEEE, MMM d').format(_startDate),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 color: AppColors.textPrimary,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 16,
@@ -121,7 +121,7 @@ class _LogPeriodSheetState extends State<_LogPeriodSheet> {
                           ],
                         ),
                       ),
-                      const Icon(Icons.chevron_right_rounded,
+                      Icon(Icons.chevron_right_rounded,
                           color: AppColors.textTertiary),
                     ],
                   ),
@@ -129,20 +129,20 @@ class _LogPeriodSheetState extends State<_LogPeriodSheet> {
               ),
             ),
             if (active) ...[
-              const SizedBox(height: 14),
+              SizedBox(height: 14),
               SwitchListTile(
                 contentPadding: EdgeInsets.zero,
                 value: _isEnding,
                 activeColor: AppColors.primary,
                 onChanged: (v) => setState(() => _isEnding = v),
-                title: const Text("I'm ending this period"),
+                title: Text("I'm ending this period"),
                 subtitle: Text(
                   'Started ${DateFormat('MMM d').format(cycle.currentCycle!.startDate)}',
-                  style: const TextStyle(color: AppColors.textSecondary),
+                  style: TextStyle(color: AppColors.textSecondary),
                 ),
               ),
             ],
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             GradientButton(
               label: _isEnding ? 'End period' : 'Start new period',
               loading: _saving,

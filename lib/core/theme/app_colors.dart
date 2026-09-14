@@ -1,59 +1,52 @@
 import 'package:flutter/material.dart';
 
-/// Centralized color palette inspired by soft, modern femtech design.
-/// Warm pinks for periods, cool lavenders for predictions, soft creams for surfaces.
+import 'cyclus_palette.dart';
+
+/// Active palette. Screens keep calling [AppColors.primary] etc.;
+/// [ThemeController] swaps the bound palette when she picks a look.
 class AppColors {
   AppColors._();
 
-  // Primary brand
-  static const Color primary = Color(0xFFFF6B9D);
-  static const Color primaryDark = Color(0xFFE94B7C);
-  static const Color primaryLight = Color(0xFFFFB3CC);
+  static CyclusPalette _p = CyclusPalette.blossom;
 
-  // Secondary / accent
-  static const Color accent = Color(0xFFA78BFA);
-  static const Color accentDark = Color(0xFF7C6CE0);
-  static const Color accentLight = Color(0xFFD6CAFF);
+  static CyclusPalette get palette => _p;
 
-  // Cycle phase colors
-  static const Color period = Color(0xFFE94B7C);
-  static const Color fertile = Color(0xFF8AC8B8);
-  static const Color ovulation = Color(0xFF5BB4A0);
-  static const Color predicted = Color(0xFFFFC4D6);
+  static void bind(CyclusPalette palette) {
+    _p = palette;
+  }
 
-  // Surfaces
-  static const Color background = Color(0xFFFFF5F7);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceAlt = Color(0xFFFDEEF2);
-  static const Color card = Color(0xFFFFFFFF);
+  static Color get primary => _p.primary;
+  static Color get primaryDark => _p.primaryDark;
+  static Color get primaryLight => _p.primaryLight;
+  static Color get accent => _p.accent;
+  static Color get accentDark => _p.accentDark;
+  static Color get accentLight => _p.accentLight;
+  static Color get period => _p.period;
+  static Color get fertile => _p.fertile;
+  static Color get ovulation => _p.ovulation;
+  static Color get predicted => _p.predicted;
 
-  // Text
-  static const Color textPrimary = Color(0xFF2D2438);
-  static const Color textSecondary = Color(0xFF6B6478);
-  static const Color textTertiary = Color(0xFFA39CB0);
+  /// Soft sky blue — clearly different from light predicted pink/peach.
+  static const Color safe = Color(0xFF6BA3C7);
+
+  static Color get background => _p.background;
+  static Color get surface => _p.surface;
+  static Color get surfaceAlt => _p.surfaceAlt;
+  static Color get card => _p.card;
+  static Color get textPrimary => _p.textPrimary;
+  static Color get textSecondary => _p.textSecondary;
+  static Color get textTertiary => _p.textTertiary;
   static const Color textOnPrimary = Color(0xFFFFFFFF);
+  static Color get success => _p.success;
+  static Color get warning => _p.warning;
+  static Color get error => _p.error;
 
-  // Status
-  static const Color success = Color(0xFF6BCFA0);
-  static const Color warning = Color(0xFFFFB347);
-  static const Color error = Color(0xFFFF6B6B);
+  static LinearGradient get primaryGradient => _p.primaryGradient;
+  static LinearGradient get accentGradient => _p.accentGradient;
+  static LinearGradient get softGradient => _p.softGradient;
 
-  // Gradients
-  static const LinearGradient primaryGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFFFF8FA3), Color(0xFFFF6B9D)],
-  );
+  static Color get softTop => _p.softTop;
+  static Color get softBottom => _p.softBottom;
 
-  static const LinearGradient accentGradient = LinearGradient(
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-    colors: [Color(0xFFBFA9FF), Color(0xFFA78BFA)],
-  );
-
-  static const LinearGradient softGradient = LinearGradient(
-    begin: Alignment.topCenter,
-    end: Alignment.bottomCenter,
-    colors: [Color(0xFFFFF5F7), Color(0xFFFDEEF2)],
-  );
+  static double get cornerRadius => _p.cornerRadius;
 }

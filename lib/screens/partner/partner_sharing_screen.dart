@@ -1,16 +1,16 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../models/cycle_prediction.dart';
-import '../../models/pregnancy_status.dart';
 import '../../models/tracking_mode.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cycle_provider.dart';
+import '../../services/cycle_service.dart';
 import '../../services/partner_service.dart';
+import '../../services/partner_share_io.dart';
 import '../../widgets/gradient_button.dart';
 
 /// Hub screen for partner sharing. Shows your invite code + a place to enter
@@ -27,6 +27,7 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
   String? _myCode;
   bool _loadingCode = false;
   bool _connecting = false;
+  bool _exporting = false;
 
   Future<void> _generateOrRefresh() async {
     final user = context.read<AuthProvider>().user;
@@ -68,12 +69,46 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Connected to ${invite.partnerDisplayName ?? "your partner"} 💕'),
+              'Connected to ${invite.partnerDisplayName ?? "your partner"}'),
           backgroundColor: AppColors.success,
         ));
       }
     } catch (e) {
-      if (mounted) _showError(e.toString().replaceFirst('Exception: ', ''));
+      if (mounted) _showError(e.toString().replaceFirst('Exception:', ''));
+    } finally {
+      if (mounted) setState(() => _connecting = false);
+    }
+  }
+
+  Future<void> _exportFile() async {
+    setState(() => _exporting = true);
+    try {
+      final snapshot =
+          await context.read<CycleProvider>().exportPartnerSnapshot();
+      await PartnerShareIo.shareSnapshot(snapshot);
+    } catch (e) {
+      if (mounted) {
+        _showError(e.toString().replaceFirst('Exception:', ''));
+      }
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
+  Future<void> _importFile() async {
+    setState(() => _connecting = true);
+    try {
+      final data = await PartnerShareIo.pickSnapshot();
+      if (data == null) return;
+      await context.read<CycleProvider>().importPartnerSnapshot(data);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Imported her cycle on this phone'),
+          backgroundColor: AppColors.success,
+        ));
+      }
+    } catch (e) {
+      if (mounted) _showError(e.toString().replaceFirst('Exception:', ''));
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
@@ -85,18 +120,17 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Disconnect partner?'),
-        content: const Text(
+        title: Text('Disconnect partner?'),
+        content: Text(
             'You\'ll stop seeing their cycle updates. You can reconnect anytime.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Disconnect',
-                style: TextStyle(color: AppColors.error)),
+            child: Text('Disconnect', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -123,25 +157,50 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
     final linkedUids = profile?.linkedPartnerUids ?? const <String>[];
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Partner sharing')),
+      appBar: AppBar(title: Text('Partner sharing')),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+          padding: EdgeInsets.fromLTRB(20, 16, 20, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const _Header(),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
+
+              _SectionCard(
+                title: 'Share a file (any phone)',
+                subtitle:
+                    'Send her cycle as a JSON file with Bluetooth, Nearby Share, WhatsApp, USB, or Files - no internet required. Your partner imports it in Partner view.',
+                child: Column(
+                  children: [
+                    GradientButton(
+                      label: 'Share my cycle file',
+                      icon: Icons.ios_share_rounded,
+                      loading: _exporting,
+                      onPressed: _exporting ? null : _exportFile,
+                    ),
+                    SizedBox(height: 10),
+                    GradientButton(
+                      label: 'Import her cycle file',
+                      gradient: AppColors.accentGradient,
+                      icon: Icons.file_open_rounded,
+                      loading: _connecting,
+                      onPressed: _connecting ? null : _importFile,
+                    ),
+                  ],
+                ),
+              ),
+              SizedBox(height: 16),
 
               // ----- INVITE -----
               _SectionCard(
-                title: 'Invite your partner',
+                title: 'Same-phone PIN',
                 subtitle:
-                    'Share this code so your partner can follow your cycle.',
+                    'Only if you both use this device. A 6-digit PIN lets a partner profile here open your live cycle.',
                 child: _myCode == null
                     ? Column(
                         children: [
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           GradientButton(
                             label: 'Generate code',
                             icon: Icons.key_rounded,
@@ -153,7 +212,7 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
                     : Column(
                         children: [
                           _CodeDisplay(code: _myCode!),
-                          const SizedBox(height: 12),
+                          SizedBox(height: 12),
                           Row(
                             children: [
                               Expanded(
@@ -162,27 +221,27 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
                                     Clipboard.setData(
                                         ClipboardData(text: _myCode!));
                                     ScaffoldMessenger.of(context)
-                                        .showSnackBar(const SnackBar(
+                                        .showSnackBar(SnackBar(
                                       content: Text('Code copied'),
                                       duration: Duration(seconds: 1),
                                     ));
                                   },
-                                  icon: const Icon(Icons.copy_rounded),
-                                  label: const Text('Copy'),
+                                  icon: Icon(Icons.copy_rounded),
+                                  label: Text('Copy'),
                                 ),
                               ),
-                              const SizedBox(width: 10),
+                              SizedBox(width: 10),
                               Expanded(
                                 child: OutlinedButton.icon(
                                   onPressed:
                                       _loadingCode ? null : _generateOrRefresh,
-                                  icon: const Icon(Icons.refresh_rounded),
-                                  label: const Text('Refresh'),
+                                  icon: Icon(Icons.refresh_rounded),
+                                  label: Text('Refresh'),
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 8),
+                          SizedBox(height: 8),
                           Text(
                             'Code expires after 24 hours',
                             style: TextStyle(
@@ -193,7 +252,7 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
                         ],
                       ),
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: 16),
 
               // ----- ACCEPT / CONNECTED PARTNERS -----
               _SectionCard(
@@ -210,9 +269,9 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
                         partnerUid: uid,
                         onDisconnect: () => _disconnect(uid),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                     ],
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     GradientButton(
                       label: linkedUids.isEmpty
                           ? 'Enter code'
@@ -225,7 +284,7 @@ class _PartnerSharingScreenState extends State<PartnerSharingScreen> {
                   ],
                 ),
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               const _PrivacyNote(),
             ],
           ),
@@ -240,7 +299,7 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(24),
@@ -254,10 +313,9 @@ class _Header extends StatelessWidget {
               color: Colors.white.withOpacity(0.2),
               shape: BoxShape.circle,
             ),
-            child:
-                const Icon(Icons.favorite_rounded, color: Colors.white, size: 30),
+            child: Icon(Icons.favorite_rounded, color: Colors.white, size: 30),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: 14),
           const Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -272,8 +330,9 @@ class _Header extends StatelessWidget {
                 ),
                 SizedBox(height: 4),
                 Text(
-                  'Share your cycle with a trusted partner so they can support you.',
-                  style: TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
+                  'Send a file to a partner\'s phone - Bluetooth, Nearby Share, or a cable. Nothing goes online.',
+                  style:
+                      TextStyle(color: Colors.white, fontSize: 12, height: 1.4),
                 ),
               ],
             ),
@@ -297,7 +356,7 @@ class _SectionCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(20),
@@ -314,22 +373,22 @@ class _SectionCard extends StatelessWidget {
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 16,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 4),
+          SizedBox(height: 4),
           Text(
             subtitle,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 13,
               height: 1.4,
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           child,
         ],
       ),
@@ -344,7 +403,7 @@ class _CodeDisplay extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 18),
+      padding: EdgeInsets.symmetric(vertical: 18),
       decoration: BoxDecoration(
         color: AppColors.surfaceAlt,
         borderRadius: BorderRadius.circular(16),
@@ -352,8 +411,8 @@ class _CodeDisplay extends StatelessWidget {
       ),
       child: Center(
         child: Text(
-          code.split('').join('  '),
-          style: const TextStyle(
+          code.split('').join(''),
+          style: TextStyle(
             color: AppColors.primary,
             fontSize: 32,
             fontWeight: FontWeight.w700,
@@ -378,19 +437,19 @@ class _EnterCodeDialogState extends State<_EnterCodeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Enter partner\'s code'),
+      title: Text('Enter partner\'s code'),
       content: TextField(
         controller: _ctrl,
         autofocus: true,
         keyboardType: TextInputType.number,
         maxLength: 6,
         textAlign: TextAlign.center,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 26,
           fontWeight: FontWeight.w700,
           letterSpacing: 6,
         ),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           hintText: '000000',
           counterText: '',
         ),
@@ -398,11 +457,11 @@ class _EnterCodeDialogState extends State<_EnterCodeDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text('Cancel'),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
-          child: const Text('Connect'),
+          child: Text('Connect'),
         ),
       ],
     );
@@ -423,45 +482,45 @@ class _PartnerRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(partnerUid)
-          .snapshots(),
+    return StreamBuilder<UserProfile?>(
+      stream: CycleService(partnerUid).watchProfile(),
       builder: (ctx, snap) {
         String name = 'Partner';
-        String subtitle = 'Loading…';
+        String subtitle = 'Loading...';
         IconData modeIcon = Icons.hourglass_empty_rounded;
         Color color = AppColors.textTertiary;
         bool unreachable = false;
 
         if (snap.connectionState != ConnectionState.waiting) {
-          if (snap.hasError || !(snap.data?.exists ?? false)) {
-            // Most commonly a rules issue if exists check fails after load.
+          if (snap.hasError || snap.data == null) {
             unreachable = true;
             name = 'Partner unavailable';
-            subtitle = 'Rules may need updating';
+            subtitle = 'No profile found on this device';
             modeIcon = Icons.error_outline_rounded;
             color = AppColors.error;
           } else {
-            final profile = UserProfile.fromMap(snap.data!.data()!);
+            final profile = snap.data!;
             final mode = profile.trackingMode ?? TrackingMode.period;
             name = profile.displayName ??
                 profile.username ??
                 profile.email.split('@').first;
             subtitle = '${mode.displayName} mode';
             (modeIcon, color) = switch (mode) {
-              TrackingMode.period => (Icons.water_drop_rounded, AppColors.period),
-              TrackingMode.conception =>
-                (Icons.spa_rounded, AppColors.fertile),
-              TrackingMode.pregnancy =>
-                (Icons.child_friendly_rounded, AppColors.accent),
+              TrackingMode.period => (
+                  Icons.water_drop_rounded,
+                  AppColors.period
+                ),
+              TrackingMode.conception => (Icons.spa_rounded, AppColors.fertile),
+              TrackingMode.pregnancy => (
+                  Icons.child_friendly_rounded,
+                  AppColors.accent
+                ),
             };
           }
         }
 
         return Container(
-          padding: const EdgeInsets.all(12),
+          padding: EdgeInsets.all(12),
           decoration: BoxDecoration(
             color: color.withOpacity(0.08),
             borderRadius: BorderRadius.circular(14),
@@ -474,23 +533,23 @@ class _PartnerRow extends StatelessWidget {
                 backgroundColor: color.withOpacity(0.18),
                 child: Icon(modeIcon, color: color, size: 18),
               ),
-              const SizedBox(width: 12),
+              SizedBox(width: 12),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
                         fontSize: 14,
                       ),
                     ),
-                    const SizedBox(height: 2),
+                    SizedBox(height: 2),
                     Text(
                       unreachable
-                          ? 'Make sure Firestore rules allow partnership reads'
+                          ? 'Ask her to generate a PIN on this phone'
                           : subtitle,
                       style: TextStyle(
                         color: unreachable
@@ -503,7 +562,7 @@ class _PartnerRow extends StatelessWidget {
                 ),
               ),
               IconButton(
-                icon: const Icon(Icons.link_off_rounded,
+                icon: Icon(Icons.link_off_rounded,
                     color: AppColors.error, size: 20),
                 tooltip: 'Disconnect',
                 onPressed: onDisconnect,
@@ -516,6 +575,7 @@ class _PartnerRow extends StatelessWidget {
   }
 }
 
+// ignore: unused_element
 class _StatusTile extends StatelessWidget {
   final IconData icon;
   final Color color;
@@ -530,7 +590,7 @@ class _StatusTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withOpacity(0.10),
         borderRadius: BorderRadius.circular(14),
@@ -538,30 +598,30 @@ class _StatusTile extends StatelessWidget {
       child: Row(
         children: [
           Container(
-            padding: const EdgeInsets.all(8),
+            padding: EdgeInsets.all(8),
             decoration: BoxDecoration(
               color: color.withOpacity(0.20),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Icon(icon, color: color, size: 18),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   title,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textPrimary,
                     fontWeight: FontWeight.w600,
                     fontSize: 13,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
                   body,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 11,
                   ),
@@ -582,12 +642,12 @@ class _PrivacyNote extends StatelessWidget {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Icon(Icons.lock_outline_rounded,
+        Icon(Icons.lock_outline_rounded,
             size: 16, color: AppColors.textTertiary),
-        const SizedBox(width: 8),
-        const Expanded(
+        SizedBox(width: 8),
+        Expanded(
           child: Text(
-            'Codes are only shareable for 24 hours. You can disconnect anytime — your partner won\'t be notified.',
+            'A cycle file can be resent anytime to refresh their view. Same-phone PINs last 24 hours.',
             style: TextStyle(
               color: AppColors.textTertiary,
               fontSize: 11,
@@ -600,6 +660,6 @@ class _PrivacyNote extends StatelessWidget {
   }
 }
 
-// Silence unused import warnings — these models are referenced via type only.
+// Silence unused import warnings - these models are referenced via type only.
 // ignore: unused_element
 typedef _Unused = CyclePhase;

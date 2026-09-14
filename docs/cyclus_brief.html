@@ -1,0 +1,309 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Cyclus — Product Brief</title>
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pink: #FF6B9D;
+    --pink-dark: #E94B7C;
+    --pink-light: #FFB3CC;
+    --lavender: #A78BFA;
+    --fertile: #8AC8B8;
+    --ovulation: #5BB4A0;
+    --bg: #FFF5F7;
+    --surface: #FFFFFF;
+    --text: #2D2438;
+    --text-sec: #6B6478;
+    --text-tert: #A39CB0;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    background: var(--bg);
+    font-family: 'Poppins', system-ui, sans-serif;
+    color: var(--text);
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .page {
+    max-width: 940px;
+    margin: 0 auto;
+    padding: 56px 48px 48px;
+  }
+  /* ------- Hero ------- */
+  .hero {
+    display: flex;
+    align-items: center;
+    gap: 28px;
+    background: linear-gradient(135deg, #FF8FA3 0%, #FF6B9D 100%);
+    color: white;
+    padding: 36px 36px;
+    border-radius: 28px;
+    box-shadow: 0 18px 40px rgba(255, 107, 157, 0.25);
+  }
+  .hero img {
+    width: 96px;
+    height: 96px;
+    border-radius: 22px;
+    box-shadow: 0 8px 18px rgba(0,0,0,0.18);
+  }
+  .hero h1 {
+    margin: 0 0 4px;
+    font-size: 38px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .hero p {
+    margin: 0;
+    opacity: 0.92;
+    font-size: 14.5px;
+    line-height: 1.55;
+    max-width: 560px;
+  }
+  /* ------- Sections ------- */
+  .section-title {
+    margin: 48px 0 18px;
+    font-size: 22px;
+    font-weight: 700;
+    color: var(--text);
+  }
+  .section-title span { color: var(--pink); }
+  .lead {
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--text-sec);
+    max-width: 720px;
+  }
+  .lead strong { color: var(--text); font-weight: 600; }
+
+  /* ------- Feature grid ------- */
+  .features {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 16px;
+    margin-top: 22px;
+  }
+  .feature {
+    background: var(--surface);
+    border-radius: 18px;
+    padding: 18px 20px;
+    box-shadow: 0 4px 14px rgba(0,0,0,0.04);
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+  }
+  .feature .ico {
+    width: 38px; height: 38px;
+    border-radius: 10px;
+    display: grid; place-items: center;
+    background: rgba(255, 107, 157, 0.12);
+    color: var(--pink);
+    font-size: 18px;
+    flex-shrink: 0;
+  }
+  .feature.lav .ico { background: rgba(167, 139, 250, 0.15); color: var(--lavender); }
+  .feature.fer .ico { background: rgba(138, 200, 184, 0.20); color: var(--ovulation); }
+  .feature h3 {
+    margin: 0 0 4px;
+    font-size: 14.5px;
+    font-weight: 600;
+  }
+  .feature p {
+    margin: 0;
+    font-size: 12px;
+    color: var(--text-sec);
+    line-height: 1.5;
+  }
+
+  /* ------- Screens grid ------- */
+  .screens {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px 24px;
+    margin-top: 28px;
+    justify-items: center;
+  }
+  .screen {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 12px;
+    max-width: 240px;
+  }
+  .screen img {
+    width: 100%;
+    border-radius: 28px;
+    box-shadow: 0 14px 28px rgba(45, 36, 56, 0.18);
+    border: 4px solid #2D2438;
+    background: #FFF5F7;
+    display: block;
+  }
+  .screen-caption {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+  }
+  .screen-caption small {
+    display: block;
+    font-size: 11px;
+    font-weight: 400;
+    color: var(--text-sec);
+    margin-top: 2px;
+  }
+
+  /* ------- Tech footer ------- */
+  .tech {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 26px;
+  }
+  .pill {
+    background: var(--surface);
+    color: var(--text-sec);
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    border: 1px solid rgba(255,179,204,0.45);
+  }
+  .footer-note {
+    margin-top: 40px;
+    text-align: center;
+    color: var(--text-tert);
+    font-size: 11.5px;
+  }
+
+  /* ------- Print ------- */
+  @media print {
+    body { background: white; }
+    .page { padding: 24px 24px; }
+    .hero { box-shadow: 0 6px 18px rgba(255, 107, 157, 0.20); }
+    .screens { gap: 22px 18px; }
+    .screen img { box-shadow: 0 6px 14px rgba(45, 36, 56, 0.18); }
+    .feature, .pill { box-shadow: none !important; }
+    /* Try to keep screen rows together on a single page. */
+    .screen { break-inside: avoid; page-break-inside: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <!-- HERO -->
+  <div class="hero">
+    <img src="icon.png" alt="Cyclus icon">
+    <div>
+      <h1>Cyclus</h1>
+      <p>Your body, beautifully understood. Track your period, plan a pregnancy, or follow your pregnancy journey week by week — all in one calm, private space.</p>
+    </div>
+  </div>
+
+  <!-- ABOUT -->
+  <h2 class="section-title">About <span>Cyclus</span></h2>
+  <p class="lead">
+    Cyclus is a cross-platform <strong>period, conception, and pregnancy tracker</strong> built with Flutter and Firebase.
+    A single, switchable home screen adapts to whichever phase of life you're in — logging cycles, surfacing
+    high-chance windows when you're trying to conceive, or showing baby-kick counts and trimester milestones
+    when you're pregnant. The same Firestore data flows through all three modes, so your history travels
+    with you as your goals change.
+  </p>
+  <p class="lead" style="margin-top: 12px;">
+    Predictions adapt to <strong>both regular and irregular cycles</strong> using a rolling average over the last
+    six cycles plus a standard-deviation check, with a confidence score shown on the home screen. Reminders
+    arrive at <strong>3, 2, and 1 days before</strong> each phase at a user-chosen time. Partner sharing
+    works via a 6-digit invite code — multiple partners are supported with a top-of-screen switcher.
+  </p>
+
+  <!-- FEATURES -->
+  <h2 class="section-title">Key features</h2>
+  <div class="features">
+    <div class="feature">
+      <div class="ico">🌸</div>
+      <div><h3>Three tracking modes</h3><p>Period, Conceive, or Pregnancy — switch any time without losing data.</p></div>
+    </div>
+    <div class="feature lav">
+      <div class="ico">📅</div>
+      <div><h3>Color-coded calendar</h3><p>Period, fertile, ovulation, predicted, and safe days at a glance.</p></div>
+    </div>
+    <div class="feature fer">
+      <div class="ico">🔔</div>
+      <div><h3>Smart reminders</h3><p>3 / 2 / 1 day lead-ups at the hour you pick. No more surprises.</p></div>
+    </div>
+    <div class="feature">
+      <div class="ico">📈</div>
+      <div><h3>Adaptive predictions</h3><p>Handles irregular cycles with confidence scoring — never just a guess.</p></div>
+    </div>
+    <div class="feature lav">
+      <div class="ico">💕</div>
+      <div><h3>Partner sharing</h3><p>Invite a partner with a 6-digit code; supports multiple partner links.</p></div>
+    </div>
+    <div class="feature fer">
+      <div class="ico">🔒</div>
+      <div><h3>Private by design</h3><p>Firestore rules gate every read; data is yours, never sold.</p></div>
+    </div>
+  </div>
+
+  <!-- SCREENS (real screenshots) -->
+  <h2 class="section-title">Inside the app</h2>
+
+  <div class="screens">
+
+    <div class="screen">
+      <img src="welcome.png" alt="Welcome screen">
+      <div class="screen-caption">Welcome<small>Your first impression</small></div>
+    </div>
+
+    <div class="screen">
+      <img src="mode-selection.png" alt="Mode selection screen">
+      <div class="screen-caption">Mode selection<small>Period · Conceive · Pregnancy</small></div>
+    </div>
+
+    <div class="screen">
+      <img src="today.png" alt="Today home screen">
+      <div class="screen-caption">Today<small>Cycle ring &amp; quick stats</small></div>
+    </div>
+
+    <div class="screen">
+      <img src="calendar.png" alt="Calendar screen">
+      <div class="screen-caption">Calendar<small>Color-coded month view</small></div>
+    </div>
+
+    <div class="screen">
+      <img src="partner-sharing.png" alt="Partner sharing screen">
+      <div class="screen-caption">Partner sharing<small>Generate &amp; redeem codes</small></div>
+    </div>
+
+    <div class="screen">
+      <img src="partner-view.png" alt="Partner view screen">
+      <div class="screen-caption">Partner view<small>Read-only partner status</small></div>
+    </div>
+
+  </div>
+
+  <!-- TECH -->
+  <h2 class="section-title">Built with</h2>
+  <div class="tech">
+    <span class="pill">Flutter 3.19+</span>
+    <span class="pill">Dart 3.3+</span>
+    <span class="pill">Firebase Auth</span>
+    <span class="pill">Cloud Firestore</span>
+    <span class="pill">flutter_local_notifications</span>
+    <span class="pill">Provider state management</span>
+    <span class="pill">Google Fonts (Poppins)</span>
+    <span class="pill">table_calendar</span>
+    <span class="pill">fl_chart</span>
+  </div>
+
+  <div class="footer-note">
+    Cyclus · v1.0.0 · Built with 💗 for any cycle — regular, irregular, or anywhere in between.
+  </div>
+
+</div>
+
+</body>
+</html>

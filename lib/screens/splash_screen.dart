@@ -9,7 +9,7 @@ class SplashScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Scaffold(
       body: Container(
-        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+        decoration: BoxDecoration(gradient: AppColors.primaryGradient),
         child: Center(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -21,11 +21,10 @@ class SplashScreen extends StatelessWidget {
                   color: Colors.white.withOpacity(0.2),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(Icons.spa_rounded,
-                    color: Colors.white, size: 48),
+                child: Icon(Icons.spa_rounded, color: Colors.white, size: 48),
               ),
-              const SizedBox(height: 24),
-              const Text(
+              SizedBox(height: 24),
+              Text(
                 AppConstants.appName,
                 style: TextStyle(
                   color: Colors.white,
@@ -34,7 +33,7 @@ class SplashScreen extends StatelessWidget {
                   letterSpacing: 1,
                 ),
               ),
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text(
                 AppConstants.appTagline,
                 style: TextStyle(
@@ -43,8 +42,8 @@ class SplashScreen extends StatelessWidget {
                   fontWeight: FontWeight.w400,
                 ),
               ),
-              const SizedBox(height: 36),
-              const SizedBox(
+              SizedBox(height: 36),
+              SizedBox(
                 width: 28,
                 height: 28,
                 child: CircularProgressIndicator(

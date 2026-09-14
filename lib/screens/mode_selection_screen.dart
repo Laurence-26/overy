@@ -85,8 +85,8 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
     final cycle = context.watch<CycleProvider>();
     final auth = context.watch<AuthProvider>();
     final name = cycle.profile?.username ??
-        cycle.profile?.displayName?.split(' ').first ??
-        auth.user?.displayName?.split(' ').first ??
+        cycle.profile?.displayName?.split('').first ??
+        auth.user?.displayName?.split('').first ??
         'there';
 
     return Scaffold(
@@ -94,7 +94,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
         children: [
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -119,11 +119,11 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: EdgeInsets.symmetric(horizontal: 24),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  const SizedBox(height: 16),
+                  SizedBox(height: 16),
                   FadeTransition(
                     opacity: _greetingFade,
                     child: SlideTransition(
@@ -134,25 +134,25 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SizedBox(height: 12),
+                          SizedBox(height: 12),
                           Text(
-                            'Welcome, $name 🌸',
-                            style: const TextStyle(
+                            'Welcome, $name',
+                            style: TextStyle(
                               color: AppColors.textPrimary,
                               fontSize: 28,
                               fontWeight: FontWeight.w700,
                             ),
                           ),
-                          const SizedBox(height: 8),
-                          const Text(
+                          SizedBox(height: 8),
+                          Text(
                             "you're ready to track.",
                             style: TextStyle(
                               color: AppColors.textSecondary,
                               fontSize: 16,
                             ),
                           ),
-                          const SizedBox(height: 6),
-                          const Text(
+                          SizedBox(height: 6),
+                          Text(
                             'What would you like to focus on today?',
                             style: TextStyle(
                               color: AppColors.textTertiary,
@@ -163,7 +163,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 36),
+                  SizedBox(height: 36),
                   Expanded(
                     child: Column(
                       mainAxisAlignment: MainAxisAlignment.center,
@@ -174,33 +174,33 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                             icon: Icons.water_drop_rounded,
                             title: 'Period',
                             subtitle: 'Track your monthly cycle',
-                            gradient: const LinearGradient(
+                            gradient: LinearGradient(
                               colors: [Color(0xFFFF8FA3), Color(0xFFFF6B9D)],
                             ),
                             onTap: () => _select(TrackingMode.period),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16),
                         _animatedCard(
                           anim: _cardAnims[1],
                           card: _ModeCard(
                             icon: Icons.favorite_rounded,
                             title: 'Get pregnant',
                             subtitle: 'Plan your conception journey',
-                            gradient: const LinearGradient(
+                            gradient: LinearGradient(
                               colors: [Color(0xFF8AC8B8), Color(0xFF5BB4A0)],
                             ),
                             onTap: () => _select(TrackingMode.conception),
                           ),
                         ),
-                        const SizedBox(height: 16),
+                        SizedBox(height: 16),
                         _animatedCard(
                           anim: _cardAnims[2],
                           card: _ModeCard(
                             icon: Icons.pregnant_woman_rounded,
                             title: 'Pregnancy',
                             subtitle: 'Follow your weekly journey',
-                            gradient: const LinearGradient(
+                            gradient: LinearGradient(
                               colors: [Color(0xFFBFA9FF), Color(0xFFA78BFA)],
                             ),
                             onTap: () => _select(TrackingMode.pregnancy),
@@ -209,8 +209,8 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                       ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Center(
+                  SizedBox(height: 16),
+                  Center(
                     child: Text(
                       'You can switch modes anytime in Profile.',
                       style: TextStyle(
@@ -219,7 +219,7 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                 ],
               ),
             ),
@@ -229,7 +229,8 @@ class _ModeSelectionScreenState extends State<ModeSelectionScreen>
     );
   }
 
-  Widget _animatedCard({required Animation<double> anim, required Widget card}) {
+  Widget _animatedCard(
+      {required Animation<double> anim, required Widget card}) {
     return AnimatedBuilder(
       animation: anim,
       builder: (_, __) {
@@ -290,7 +291,7 @@ class _ModeCard extends StatelessWidget {
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 22),
+          padding: EdgeInsets.symmetric(horizontal: 22),
           child: Row(
             children: [
               Container(
@@ -302,7 +303,7 @@ class _ModeCard extends StatelessWidget {
                 ),
                 child: Icon(icon, color: Colors.white, size: 32),
               ),
-              const SizedBox(width: 18),
+              SizedBox(width: 18),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -310,13 +311,13 @@ class _ModeCard extends StatelessWidget {
                   children: [
                     Text(
                       title,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: Colors.white,
                         fontSize: 19,
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       subtitle,
                       style: TextStyle(
@@ -327,7 +328,7 @@ class _ModeCard extends StatelessWidget {
                   ],
                 ),
               ),
-              const Icon(Icons.arrow_forward_rounded, color: Colors.white),
+              Icon(Icons.arrow_forward_rounded, color: Colors.white),
             ],
           ),
         ),

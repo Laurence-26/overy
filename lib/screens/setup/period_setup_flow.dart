@@ -6,7 +6,6 @@ import '../../core/constants.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/cycle_provider.dart';
 import '../../widgets/number_wheel_picker.dart';
-import '../home/home_shell.dart';
 import 'setup_scaffold.dart';
 
 class PeriodSetupFlow extends StatefulWidget {
@@ -65,29 +64,30 @@ class _PeriodSetupFlowState extends State<PeriodSetupFlow> {
     setState(() => _saving = true);
     final cycle = context.read<CycleProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context);
     final profile = cycle.profile;
 
     final start = _lastPeriodDate ??
         _notSureRange?.start ??
         DateTime.now().subtract(const Duration(days: 14));
+    final startLatest = _lastPeriodDate != null ? null : _notSureRange?.end;
 
     try {
-      await cycle.startPeriod(start).timeout(const Duration(seconds: 15));
+      await cycle
+          .startPeriod(start, dateLatest: startLatest)
+          .timeout(const Duration(seconds: 15));
       if (profile != null) {
         await cycle
             .updateProfile(profile.copyWith(
               averageCycleLength: _cycleLength,
               averagePeriodLength: _periodLength,
+              hasIrregularCycles:
+                  startLatest != null ? true : profile.hasIrregularCycles,
               setupComplete: true,
             ))
             .timeout(const Duration(seconds: 15));
       }
       if (!mounted) return;
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const HomeShell()),
-        (_) => false,
-      );
+      Navigator.of(context).popUntil((r) => r.isFirst);
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text('Couldn\'t save: $e'),
@@ -102,12 +102,18 @@ class _PeriodSetupFlowState extends State<PeriodSetupFlow> {
   @override
   Widget build(BuildContext context) {
     final titles = [
-      ('When did your last period start?',
-          'Pick a date — or let us know if you\'re unsure.'),
-      ('How long is your cycle, usually?',
-          'Cycle length is the number of days from one period\'s start to the next.'),
-      ('How many days does your period last?',
-          'A typical period lasts 3 to 7 days.'),
+      (
+        'When did your last period start?',
+        'Pick a date - or let us know if you\'re unsure.'
+      ),
+      (
+        'How long is your cycle, usually?',
+        'Cycle length is the number of days from one period\'s start to the next.'
+      ),
+      (
+        'How many days does your period last?',
+        'A typical period lasts 3 to 7 days.'
+      ),
     ];
 
     return SetupScaffold(
@@ -159,13 +165,13 @@ class _PeriodSetupFlowState extends State<PeriodSetupFlow> {
             }
           },
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         _DateTile(
           icon: Icons.help_outline_rounded,
-          label: 'I\'m not sure — give me a range',
+          label: 'I\'m not sure - give me a range',
           value: _notSureRange == null
               ? 'Tap to pick a date range'
-              : '${DateFormat('MMM d').format(_notSureRange!.start)} → ${DateFormat('MMM d').format(_notSureRange!.end)}',
+              : '${DateFormat('MMM d').format(_notSureRange!.start)} > ${DateFormat('MMM d').format(_notSureRange!.end)}',
           selected: _notSureRange != null,
           onTap: () async {
             final now = DateTime.now();
@@ -244,7 +250,7 @@ class _DateTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(18),
+          padding: EdgeInsets.all(18),
           decoration: BoxDecoration(
             color: selected
                 ? AppColors.primary.withOpacity(0.10)
@@ -260,29 +266,29 @@ class _DateTile extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: AppColors.primary.withOpacity(0.14),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: AppColors.primary),
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
-                    const SizedBox(height: 4),
+                    SizedBox(height: 4),
                     Text(
                       value,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textSecondary,
                         fontSize: 13,
                       ),
@@ -294,9 +300,7 @@ class _DateTile extends StatelessWidget {
                 selected
                     ? Icons.check_circle_rounded
                     : Icons.radio_button_unchecked_rounded,
-                color: selected
-                    ? AppColors.primary
-                    : AppColors.textTertiary,
+                color: selected ? AppColors.primary : AppColors.textTertiary,
               ),
             ],
           ),

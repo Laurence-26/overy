@@ -11,15 +11,15 @@ class ChoiceTile extends StatelessWidget {
   final VoidCallback onTap;
   final Color accent;
 
-  const ChoiceTile({
+  ChoiceTile({
     super.key,
     required this.icon,
     required this.label,
     this.subtitle,
     required this.selected,
     required this.onTap,
-    this.accent = AppColors.primary,
-  });
+    Color? accent,
+  }) : accent = accent ?? AppColors.primary;
 
   @override
   Widget build(BuildContext context) {
@@ -30,7 +30,7 @@ class ChoiceTile extends StatelessWidget {
         onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: selected
                 ? accent.withOpacity(0.10)
@@ -44,30 +44,30 @@ class ChoiceTile extends StatelessWidget {
           child: Row(
             children: [
               Container(
-                padding: const EdgeInsets.all(10),
+                padding: EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: accent.withOpacity(0.14),
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Icon(icon, color: accent),
               ),
-              const SizedBox(width: 14),
+              SizedBox(width: 14),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       label,
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.textPrimary,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                     if (subtitle != null) ...[
-                      const SizedBox(height: 4),
+                      SizedBox(height: 4),
                       Text(
                         subtitle!,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 13,
                         ),

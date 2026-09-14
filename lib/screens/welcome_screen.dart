@@ -18,7 +18,7 @@ class WelcomeScreen extends StatelessWidget {
           // Soft gradient background
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
@@ -50,7 +50,7 @@ class WelcomeScreen extends StatelessWidget {
 
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 28),
+              padding: EdgeInsets.symmetric(horizontal: 28),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
@@ -70,12 +70,12 @@ class WelcomeScreen extends StatelessWidget {
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.spa_rounded,
+                      child: Icon(Icons.spa_rounded,
                           color: Colors.white, size: 56),
                     ),
                   ),
-                  const SizedBox(height: 36),
-                  const Text(
+                  SizedBox(height: 36),
+                  Text(
                     'Your body,\nbeautifully understood',
                     textAlign: TextAlign.center,
                     style: TextStyle(
@@ -85,9 +85,9 @@ class WelcomeScreen extends StatelessWidget {
                       height: 1.15,
                     ),
                   ),
-                  const SizedBox(height: 16),
-                  const Text(
-                    'Track your period, plan a pregnancy, or follow your journey week by week — all in one calm, private space.',
+                  SizedBox(height: 16),
+                  Text(
+                    'Track your period, plan a pregnancy, or follow week by week - fully offline, private to this phone.',
                     textAlign: TextAlign.center,
                     style: TextStyle(
                       color: AppColors.textSecondary,
@@ -103,14 +103,14 @@ class WelcomeScreen extends StatelessWidget {
                       _fadeRoute(const GetStartedScreen()),
                     ),
                   ),
-                  const SizedBox(height: 12),
+                  SizedBox(height: 12),
                   TextButton(
                     onPressed: () => Navigator.of(context).push(
                       _fadeRoute(const SignInScreen()),
                     ),
-                    child: const Text.rich(
+                    child: Text.rich(
                       TextSpan(
-                        text: 'Already have an account? ',
+                        text: 'Already on this phone?',
                         style: TextStyle(color: AppColors.textSecondary),
                         children: [
                           TextSpan(
@@ -124,23 +124,23 @@ class WelcomeScreen extends StatelessWidget {
                       ),
                     ),
                   ),
-                  // Partner sign-in entry — opens the same sign-in flow but
+                  // Partner sign-in entry - opens the same sign-in flow but
                   // routes to PartnerHomeScreen after success.
                   TextButton.icon(
                     onPressed: () => Navigator.of(context).push(
                       _fadeRoute(const SignInScreen(asPartner: true)),
                     ),
-                    icon: const Icon(Icons.favorite_rounded,
+                    icon: Icon(Icons.favorite_rounded,
                         color: AppColors.accent, size: 18),
-                    label: const Text(
-                      'Sign in as a partner',
+                    label: Text(
+                      'Unlock as a partner',
                       style: TextStyle(
                         color: AppColors.accent,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ),
-                  const SizedBox(height: 24),
+                  SizedBox(height: 24),
                 ],
               ),
             ),
@@ -159,6 +159,7 @@ class WelcomeScreen extends StatelessWidget {
   Route _fadeRoute(Widget child) => PageRouteBuilder(
         transitionDuration: const Duration(milliseconds: 320),
         pageBuilder: (_, __, ___) => child,
-        transitionsBuilder: (_, a, __, c) => FadeTransition(opacity: a, child: c),
+        transitionsBuilder: (_, a, __, c) =>
+            FadeTransition(opacity: a, child: c),
       );
 }

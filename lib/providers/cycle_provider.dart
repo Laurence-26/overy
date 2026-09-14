@@ -22,6 +22,7 @@ class CycleProvider extends ChangeNotifier {
   StreamSubscription? _cyclesSub;
   StreamSubscription? _profileSub;
   StreamSubscription? _logsSub;
+  String? _boundUid;
 
   UserProfile? _profile;
   List<Cycle> _cycles = const [];
@@ -35,11 +36,8 @@ class CycleProvider extends ChangeNotifier {
   bool get loading => _loading;
   Cycle? get currentCycle => _cycles.isNotEmpty ? _cycles.first : null;
 
-  /// Current tracking mode — null until the user picks one.
   TrackingMode? get trackingMode => _profile?.trackingMode;
 
-  /// Computed pregnancy snapshot when the user is in pregnancy mode.
-  /// Falls back to LMP-derived data if due date isn't set.
   PregnancyStatus? get pregnancyStatus {
     if (_profile?.trackingMode != TrackingMode.pregnancy) return null;
     if (_profile?.dueDate != null) {
@@ -54,17 +52,14 @@ class CycleProvider extends ChangeNotifier {
     return null;
   }
 
-  /// Baby-kick count for pregnancy mode (sum of all 'Baby kicks' entries
-  /// stored in daily logs' notes field as a number).
   int get totalKicks {
     var total = 0;
     for (final log in _logsByDocId.values) {
-      if (log.symptoms.contains('Baby kicks')) total++;
+      total += log.symptoms.where((s) => s == 'Baby kicks').length;
     }
     return total;
   }
 
-  /// Today's logged kick count.
   int get todayKicks {
     final today = DateTime.now();
     final log = logForDay(today);
@@ -79,28 +74,50 @@ class CycleProvider extends ChangeNotifier {
 
   List<DailyLog> get allLogs => _logsByDocId.values.toList();
 
-  /// Bind to a freshly signed-in user.
-  void bind(String uid) {
+  void bind(
+    String uid, {
+    String email = '',
+    String? username,
+    String? displayName,
+    bool partnerOnly = false,
+  }) {
+    if (_boundUid == uid && _service != null) {
+      unawaited(ensureProfile(
+        uid: uid,
+        email: email,
+        username: username,
+        displayName: displayName,
+        partnerOnly: partnerOnly,
+      ));
+      return;
+    }
     unbind();
+    _boundUid = uid;
     _service = CycleService(uid);
     _loading = true;
-    notifyListeners();
 
     _profileSub = _service!.watchProfile().listen((p) {
-      _profile = p;
+      if (p != null) _profile = p;
       _recompute();
     });
     _cyclesSub = _service!.watchCycles().listen((cs) {
       _cycles = cs;
       _recompute();
     });
-    final from =
-        DateTime.now().subtract(const Duration(days: 365));
+    final from = DateTime.now().subtract(const Duration(days: 400));
     _logsSub = _service!.watchLogs(from: from).listen((logs) {
       _logsByDocId = {for (final l in logs) l.docId: l};
       _loading = false;
-      notifyListeners();
+      _recompute();
     });
+
+    unawaited(ensureProfile(
+      uid: uid,
+      email: email,
+      username: username,
+      displayName: displayName,
+      partnerOnly: partnerOnly,
+    ));
   }
 
   void unbind() {
@@ -108,6 +125,7 @@ class CycleProvider extends ChangeNotifier {
     _profileSub?.cancel();
     _logsSub?.cancel();
     _service = null;
+    _boundUid = null;
     _profile = null;
     _cycles = const [];
     _logsByDocId = const {};
@@ -122,51 +140,31 @@ class CycleProvider extends ChangeNotifier {
           _profile?.averageCycleLength ?? AppConstants.defaultCycleLength,
       fallbackPeriodLength:
           _profile?.averagePeriodLength ?? AppConstants.defaultPeriodLength,
+      logs: allLogs,
+      userReportedIrregular: _profile?.hasIrregularCycles == true,
+      age: _profile?.age,
     );
     _refreshNotifications();
     notifyListeners();
   }
 
   Future<void> _refreshNotifications() async {
-    if (_profile?.notificationsEnabled == false) {
+    final profile = _profile;
+    if (profile == null) return;
+    if (profile.notificationsEnabled == false) {
       await NotificationService.instance.cancelAll();
       return;
     }
 
-    // Auto-request permission the first time we have a prediction or pregnancy.
     await NotificationService.instance.requestPermissions();
-
-    // Respect the user's preferred reminder time before scheduling.
-    NotificationService.instance.setReminderTime(
-      hour: _profile?.reminderHour ?? 9,
-      minute: _profile?.reminderMinute ?? 0,
+    final mode = profile.trackingMode ?? TrackingMode.period;
+    await NotificationService.instance.rescheduleForPerson(
+      profile: profile,
+      prediction: _prediction,
+      phase: phaseFor(DateTime.now()),
+      logs: allLogs,
+      pregnancy: mode == TrackingMode.pregnancy ? pregnancyStatus : null,
     );
-
-    final mode = _profile?.trackingMode ?? TrackingMode.period;
-    final p = _prediction;
-
-    if (mode == TrackingMode.pregnancy) {
-      // Pregnancy: schedule next trimester reminder + daily nudge only.
-      final status = pregnancyStatus;
-      if (status != null) {
-        final next = status.nextTrimesterStart;
-        if (next != null) {
-          await NotificationService.instance.scheduleTrimesterReminder(
-            nextTrimesterStart: next,
-            trimesterLabel: status.nextTrimesterLabel ?? 'Next trimester',
-          );
-        }
-      }
-    } else if (p != null) {
-      // Period / Conception: schedule three reminders each at 3, 2, 1 days
-      // before the next period and the fertile-window start.
-      await NotificationService.instance
-          .schedulePeriodReminder(nextPeriodStart: p.nextPeriodStart);
-      await NotificationService.instance.scheduleFertileWindowReminder(
-          fertileWindowStart: p.fertileWindowStart);
-    }
-
-    await NotificationService.instance.scheduleDailyLogReminder();
   }
 
   CyclePhase phaseFor(DateTime day) => PredictionEngine.phaseFor(
@@ -175,42 +173,78 @@ class CycleProvider extends ChangeNotifier {
         prediction: _prediction,
       );
 
-  // ----- Mutations -----
   Future<void> ensureProfile({
     required String uid,
     required String email,
     String? username,
     String? displayName,
+    bool partnerOnly = false,
   }) async {
-    final existing = await _service!.getProfile();
-    if (existing != null) {
-      // Backfill username if missing (e.g. user signed up via Google).
-      if (existing.username == null && username != null) {
-        await _service!.saveProfile(existing.copyWith(username: username));
+    final service = _service;
+    if (service == null) return;
+    try {
+      final existing = await service.getProfile();
+      if (existing != null) {
+        UserProfile next = existing;
+        if (existing.username == null && username != null) {
+          next = next.copyWith(username: username);
+        }
+        // Only mark brand-new / empty profiles as partner-only. Never convert
+        // an existing period tracker into partner mode.
+        if (partnerOnly &&
+            !existing.partnerOnlyMode &&
+            existing.trackingMode == null &&
+            existing.setupComplete != true) {
+          next = next.copyWith(partnerOnlyMode: true, setupComplete: true);
+        }
+        if (!identical(next, existing) &&
+            (next.username != existing.username ||
+                next.partnerOnlyMode != existing.partnerOnlyMode ||
+                next.setupComplete != existing.setupComplete)) {
+          await service.saveProfile(next);
+          _profile = next;
+          _loading = false;
+          notifyListeners();
+        } else if (_profile == null) {
+          _profile = existing;
+          _loading = false;
+          notifyListeners();
+        }
+        return;
       }
-      return;
+      final created = UserProfile(
+        uid: uid,
+        email: email,
+        username: username,
+        displayName: displayName ?? username,
+        createdAt: DateTime.now(),
+        partnerOnlyMode: partnerOnly,
+        setupComplete: partnerOnly,
+      );
+      await service.saveProfile(created);
+      _profile = created;
+      _loading = false;
+      notifyListeners();
+    } catch (e, st) {
+      debugPrint('ensureProfile failed: $e\n$st');
+      _loading = false;
+      notifyListeners();
     }
-    await _service!.saveProfile(UserProfile(
-      uid: uid,
-      email: email,
-      username: username,
-      displayName: displayName ?? username,
-      createdAt: DateTime.now(),
-    ));
   }
 
   Future<void> updateProfile(UserProfile p) async {
     await _service!.saveProfile(p);
   }
 
-  Future<void> startPeriod(DateTime date) async {
+  Future<void> startPeriod(DateTime date, {DateTime? dateLatest}) async {
     await _service!.startNewCycle(
       startDate: date,
+      startDateLatest: dateLatest,
       defaultPeriodLength:
           _profile?.averagePeriodLength ?? AppConstants.defaultPeriodLength,
     );
-    final log = (logForDay(date) ?? DailyLog(date: date))
-        .copyWith(flow: 'Medium');
+    final log =
+        (logForDay(date) ?? DailyLog(date: date)).copyWith(flow: 'Medium');
     await _service!.saveLog(log);
   }
 
@@ -228,14 +262,10 @@ class CycleProvider extends ChangeNotifier {
     await _service!.deleteCycle(cycleId);
   }
 
-  /// Wipe all Firestore data owned by the current user. Caller is responsible
-  /// for deleting the Firebase Auth user separately (it may require recent
-  /// login).
   Future<void> wipeAccountData() async {
     if (_service == null) return;
     await NotificationService.instance.cancelAll();
     await _service!.wipeAccountData();
-    // Clear local cached state.
     _profile = null;
     _cycles = const [];
     _logsByDocId = const {};
@@ -243,7 +273,76 @@ class CycleProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Append a single "Baby kicks" marker to today's log.
+  /// Seeds in-memory demo data for store screenshots (no disk I/O).
+  @visibleForTesting
+  void loadStoreDemo() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final currentStart = today.subtract(const Duration(days: 13));
+    final prevStart = currentStart.subtract(const Duration(days: 28));
+    final prev2Start = prevStart.subtract(const Duration(days: 29));
+    final prev3Start = prev2Start.subtract(const Duration(days: 27));
+
+    _cycles = [
+      Cycle(
+        id: 'demo-current',
+        startDate: currentStart,
+        periodLength: 5,
+      ),
+      Cycle(
+        id: 'demo-1',
+        startDate: prevStart,
+        endDate: currentStart.subtract(const Duration(days: 1)),
+        periodLength: 5,
+        cycleLength: 28,
+      ),
+      Cycle(
+        id: 'demo-2',
+        startDate: prev2Start,
+        endDate: prevStart.subtract(const Duration(days: 1)),
+        periodLength: 5,
+        cycleLength: 29,
+      ),
+      Cycle(
+        id: 'demo-3',
+        startDate: prev3Start,
+        endDate: prev2Start.subtract(const Duration(days: 1)),
+        periodLength: 4,
+        cycleLength: 27,
+      ),
+    ];
+
+    _profile = UserProfile(
+      uid: 'demo-store',
+      email: '',
+      username: 'ROSE',
+      displayName: 'ROSE',
+      createdAt: today.subtract(const Duration(days: 120)),
+      trackingMode: TrackingMode.period,
+      setupComplete: true,
+      hasSeenTutorial: true,
+      averageCycleLength: 28,
+      averagePeriodLength: 5,
+      themeId: 'blossom',
+      themePrefs: const {
+        'lookId': 'blossom',
+        'motifId': 'flowers',
+        'cycleViewId': 'flower',
+        'showBackground': true,
+        'backgroundImageStrength': 0.55,
+      },
+    );
+
+    _prediction = PredictionEngine.predict(
+      cyclesNewestFirst: _cycles,
+      fallbackCycleLength: 28,
+      fallbackPeriodLength: 5,
+      now: today,
+    );
+    _loading = false;
+    notifyListeners();
+  }
+
   Future<void> logBabyKick() async {
     final today = DateTime.now();
     final existing = logForDay(today) ?? DailyLog(date: today);
@@ -253,8 +352,6 @@ class CycleProvider extends ChangeNotifier {
     await _service!.saveLog(updated);
   }
 
-  /// Switch tracking mode (period / conception / pregnancy).
-  /// Used both for first-time setup and "change mode" later.
   Future<void> setTrackingMode(TrackingMode mode) async {
     if (_profile == null) return;
     await _service!.saveProfile(_profile!.copyWith(trackingMode: mode));
@@ -263,6 +360,22 @@ class CycleProvider extends ChangeNotifier {
   Future<void> markSetupComplete() async {
     if (_profile == null) return;
     await _service!.saveProfile(_profile!.copyWith(setupComplete: true));
+  }
+
+  Future<Map<String, dynamic>> exportPartnerSnapshot() async {
+    if (_service == null) {
+      throw Exception('No profile is open.');
+    }
+    return _service!.exportSnapshot();
+  }
+
+  Future<String> importPartnerSnapshot(Map<String, dynamic> data) async {
+    final importedUid = await CycleService.importSnapshot(data);
+    final profile = _profile;
+    if (profile != null) {
+      await updateProfile(profile.copyWith(addLinkedPartnerUid: importedUid));
+    }
+    return importedUid;
   }
 
   @override

@@ -18,7 +18,7 @@ class SetupScaffold extends StatelessWidget {
   final bool primaryLoading;
   final Color accent;
 
-  const SetupScaffold({
+  SetupScaffold({
     super.key,
     required this.currentPage,
     required this.totalPages,
@@ -29,8 +29,8 @@ class SetupScaffold extends StatelessWidget {
     this.primaryLabel = 'Continue',
     this.onBack,
     this.primaryLoading = false,
-    this.accent = AppColors.primary,
-  });
+    Color? accent,
+  }) : accent = accent ?? AppColors.primary;
 
   @override
   Widget build(BuildContext context) {
@@ -39,14 +39,14 @@ class SetupScaffold extends StatelessWidget {
         children: [
           Positioned.fill(
             child: Container(
-              decoration: const BoxDecoration(
+              decoration: BoxDecoration(
                 gradient: LinearGradient(
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   colors: [
-                    Color(0xFFFFE5EC),
-                    Color(0xFFFFF5F7),
-                    Color(0xFFF3E8FF),
+                    AppColors.softTop,
+                    AppColors.background,
+                    AppColors.softBottom,
                   ],
                 ),
               ),
@@ -56,27 +56,27 @@ class SetupScaffold extends StatelessWidget {
             child: Column(
               children: [
                 _topBar(context),
-                const SizedBox(height: 8),
+                SizedBox(height: 8),
                 _progressDots(),
-                const SizedBox(height: 26),
+                SizedBox(height: 26),
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 28),
+                  padding: EdgeInsets.symmetric(horizontal: 28),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
                         title,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textPrimary,
                           fontSize: 26,
                           fontWeight: FontWeight.w700,
                           height: 1.2,
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      SizedBox(height: 8),
                       Text(
                         subtitle,
-                        style: const TextStyle(
+                        style: TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 14,
                           height: 1.5,
@@ -85,16 +85,15 @@ class SetupScaffold extends StatelessWidget {
                     ],
                   ),
                 ),
-                const SizedBox(height: 28),
+                SizedBox(height: 28),
                 Expanded(
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    padding: EdgeInsets.symmetric(horizontal: 24),
                     child: child,
                   ),
                 ),
                 Padding(
-                  padding:
-                      const EdgeInsets.fromLTRB(28, 0, 28, 24),
+                  padding: EdgeInsets.fromLTRB(28, 0, 28, 24),
                   child: GradientButton(
                     label: primaryLabel,
                     icon: Icons.arrow_forward_rounded,
@@ -115,23 +114,23 @@ class SetupScaffold extends StatelessWidget {
 
   Widget _topBar(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       child: Row(
         children: [
           IconButton(
-            icon: const Icon(Icons.arrow_back_rounded),
+            icon: Icon(Icons.arrow_back_rounded),
             onPressed: onBack ?? () => Navigator.maybePop(context),
           ),
           const Spacer(),
           Text(
             'Step ${currentPage + 1} of $totalPages',
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 12,
               fontWeight: FontWeight.w500,
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
         ],
       ),
     );
@@ -145,13 +144,11 @@ class SetupScaffold extends StatelessWidget {
         final done = i < currentPage;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 220),
-          margin: const EdgeInsets.symmetric(horizontal: 4),
+          margin: EdgeInsets.symmetric(horizontal: 4),
           width: active ? 28 : 8,
           height: 8,
           decoration: BoxDecoration(
-            color: active || done
-                ? accent
-                : accent.withOpacity(0.25),
+            color: active || done ? accent : accent.withOpacity(0.25),
             borderRadius: BorderRadius.circular(4),
           ),
         );

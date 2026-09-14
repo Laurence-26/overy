@@ -17,7 +17,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
   final _controller = PageController();
   int _page = 0;
 
-  static const _slides = [
+  static final _slides = [
     _Slide(
       icon: Icons.spa_rounded,
       title: 'Understand your body',
@@ -60,7 +60,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
               alignment: Alignment.topRight,
               child: TextButton(
                 onPressed: _finish,
-                child: const Text('Skip'),
+                child: Text('Skip'),
               ),
             ),
             Expanded(
@@ -77,20 +77,19 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 final active = i == _page;
                 return AnimatedContainer(
                   duration: const Duration(milliseconds: 250),
-                  margin: const EdgeInsets.symmetric(horizontal: 4),
+                  margin: EdgeInsets.symmetric(horizontal: 4),
                   width: active ? 24 : 8,
                   height: 8,
                   decoration: BoxDecoration(
-                    color:
-                        active ? AppColors.primary : AppColors.primaryLight,
+                    color: active ? AppColors.primary : AppColors.primaryLight,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 );
               }),
             ),
-            const SizedBox(height: 24),
+            SizedBox(height: 24),
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24),
+              padding: EdgeInsets.symmetric(horizontal: 24),
               child: GradientButton(
                 label: _page == _slides.length - 1 ? 'Get started' : 'Next',
                 onPressed: () {
@@ -105,7 +104,7 @@ class _OnboardingScreenState extends State<OnboardingScreen> {
                 },
               ),
             ),
-            const SizedBox(height: 28),
+            SizedBox(height: 28),
           ],
         ),
       ),
@@ -129,7 +128,7 @@ class _Slide extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 32),
+      padding: EdgeInsets.symmetric(horizontal: 32),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
@@ -144,21 +143,21 @@ class _Slide extends StatelessWidget {
             ),
             child: Icon(icon, size: 80, color: color),
           ),
-          const SizedBox(height: 36),
+          SizedBox(height: 36),
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 26,
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           Text(
             subtitle,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textSecondary,
               fontSize: 15,
               height: 1.5,

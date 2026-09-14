@@ -1,4 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
+import '../core/json_dates.dart';
 
 /// Per-day notes: flow level, symptoms, mood, free-form text.
 class DailyLog {
@@ -17,11 +17,14 @@ class DailyLog {
   });
 
   bool get isEmpty =>
-      flow == null && symptoms.isEmpty && moods.isEmpty && (notes ?? '').isEmpty;
+      flow == null &&
+      symptoms.isEmpty &&
+      moods.isEmpty &&
+      (notes ?? '').isEmpty;
 
   bool get hasFlow => flow != null;
 
-  /// Firestore document id — one log per day.
+  /// One log per day.
   String get docId =>
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
 
@@ -42,7 +45,7 @@ class DailyLog {
   }
 
   Map<String, dynamic> toMap() => {
-        'date': Timestamp.fromDate(date),
+        'date': JsonDates.encode(date),
         'flow': flow,
         'symptoms': symptoms,
         'moods': moods,
@@ -50,7 +53,7 @@ class DailyLog {
       };
 
   factory DailyLog.fromMap(Map<String, dynamic> m) => DailyLog(
-        date: (m['date'] as Timestamp).toDate(),
+        date: JsonDates.decodeRequired(m['date']),
         flow: m['flow'] as String?,
         symptoms: List<String>.from(m['symptoms'] as List? ?? const []),
         moods: List<String>.from(m['moods'] as List? ?? const []),

@@ -1,5 +1,4 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
-
+import '../core/json_dates.dart';
 import 'tracking_mode.dart';
 
 class UserProfile {
@@ -32,9 +31,8 @@ class UserProfile {
   final int? previousPregnancies;
   final bool? takingPrenatalVitamins;
 
-  // Partner sharing — uids of the partners this user has connected to
-  // (read-only view of each partner's cycle). One-way links. Multiple
-  // partners are supported.
+  // Partner sharing - uids of the partners this user has connected to
+  // (read-only view of each partner's cycle). Same-device, fully offline.
   final List<String> linkedPartnerUids;
 
   /// Convenience: the most-recently linked partner, or null.
@@ -48,6 +46,19 @@ class UserProfile {
   // True once the user has finished (or skipped) the in-app tutorial.
   // Defaults to false so new users see it; veterans can replay from Profile.
   final bool hasSeenTutorial;
+
+  /// Which reminder types this person wants. Defaults on; she can mute any.
+  final bool notifyPeriod;
+  final bool notifyFertile;
+  final bool notifyDailyLog;
+  final bool notifyVitamins;
+  final bool notifyTrimester;
+
+  /// Visual look id - see [AppLook].
+  final String themeId;
+
+  /// Full editable theme prefs (colors, motif, text, corners).
+  final Map<String, dynamic> themePrefs;
 
   const UserProfile({
     required this.uid,
@@ -74,7 +85,22 @@ class UserProfile {
     this.linkedPartnerUids = const [],
     this.partnerOnlyMode = false,
     this.hasSeenTutorial = false,
+    this.notifyPeriod = true,
+    this.notifyFertile = true,
+    this.notifyDailyLog = true,
+    this.notifyVitamins = true,
+    this.notifyTrimester = true,
+    this.themeId = 'blossom',
+    this.themePrefs = const {},
   });
+
+  String get firstName {
+    final n = (displayName ?? username ?? '').trim();
+    if (n.isEmpty) return '';
+    return n.split(RegExp(r'\s+')).first;
+  }
+
+  String get greetingName => firstName.isEmpty ? 'love' : firstName;
 
   UserProfile copyWith({
     String? username,
@@ -101,6 +127,13 @@ class UserProfile {
     bool clearLinkedPartner = false,
     bool? partnerOnlyMode,
     bool? hasSeenTutorial,
+    bool? notifyPeriod,
+    bool? notifyFertile,
+    bool? notifyDailyLog,
+    bool? notifyVitamins,
+    bool? notifyTrimester,
+    String? themeId,
+    Map<String, dynamic>? themePrefs,
   }) {
     List<String> nextLinked;
     if (clearLinkedPartner) {
@@ -135,8 +168,7 @@ class UserProfile {
       lastMenstrualPeriod: lastMenstrualPeriod ?? this.lastMenstrualPeriod,
       age: age ?? this.age,
       hasIrregularCycles: hasIrregularCycles ?? this.hasIrregularCycles,
-      hasMedicalConditions:
-          hasMedicalConditions ?? this.hasMedicalConditions,
+      hasMedicalConditions: hasMedicalConditions ?? this.hasMedicalConditions,
       medicalConditions: medicalConditions ?? this.medicalConditions,
       previousPregnancies: previousPregnancies ?? this.previousPregnancies,
       takingPrenatalVitamins:
@@ -144,6 +176,13 @@ class UserProfile {
       linkedPartnerUids: nextLinked,
       partnerOnlyMode: partnerOnlyMode ?? this.partnerOnlyMode,
       hasSeenTutorial: hasSeenTutorial ?? this.hasSeenTutorial,
+      notifyPeriod: notifyPeriod ?? this.notifyPeriod,
+      notifyFertile: notifyFertile ?? this.notifyFertile,
+      notifyDailyLog: notifyDailyLog ?? this.notifyDailyLog,
+      notifyVitamins: notifyVitamins ?? this.notifyVitamins,
+      notifyTrimester: notifyTrimester ?? this.notifyTrimester,
+      themeId: themeId ?? this.themeId,
+      themePrefs: themePrefs ?? this.themePrefs,
     );
   }
 
@@ -152,20 +191,17 @@ class UserProfile {
         'email': email,
         'username': username,
         'displayName': displayName,
-        'dateOfBirth':
-            dateOfBirth == null ? null : Timestamp.fromDate(dateOfBirth!),
+        'dateOfBirth': JsonDates.encode(dateOfBirth),
         'averageCycleLength': averageCycleLength,
         'averagePeriodLength': averagePeriodLength,
         'notificationsEnabled': notificationsEnabled,
         'reminderHour': reminderHour,
         'reminderMinute': reminderMinute,
-        'createdAt': Timestamp.fromDate(createdAt),
+        'createdAt': JsonDates.encode(createdAt),
         'trackingMode': trackingMode?.id,
         'setupComplete': setupComplete,
-        'dueDate': dueDate == null ? null : Timestamp.fromDate(dueDate!),
-        'lastMenstrualPeriod': lastMenstrualPeriod == null
-            ? null
-            : Timestamp.fromDate(lastMenstrualPeriod!),
+        'dueDate': JsonDates.encode(dueDate),
+        'lastMenstrualPeriod': JsonDates.encode(lastMenstrualPeriod),
         'age': age,
         'hasIrregularCycles': hasIrregularCycles,
         'hasMedicalConditions': hasMedicalConditions,
@@ -175,6 +211,13 @@ class UserProfile {
         'linkedPartnerUids': linkedPartnerUids,
         'partnerOnlyMode': partnerOnlyMode,
         'hasSeenTutorial': hasSeenTutorial,
+        'notifyPeriod': notifyPeriod,
+        'notifyFertile': notifyFertile,
+        'notifyDailyLog': notifyDailyLog,
+        'notifyVitamins': notifyVitamins,
+        'notifyTrimester': notifyTrimester,
+        'themeId': themeId,
+        'themePrefs': themePrefs,
       };
 
   factory UserProfile.fromMap(Map<String, dynamic> m) => UserProfile(
@@ -182,19 +225,17 @@ class UserProfile {
         email: m['email'] as String? ?? '',
         username: m['username'] as String?,
         displayName: m['displayName'] as String?,
-        dateOfBirth: (m['dateOfBirth'] as Timestamp?)?.toDate(),
+        dateOfBirth: JsonDates.decode(m['dateOfBirth']),
         averageCycleLength: m['averageCycleLength'] as int? ?? 28,
         averagePeriodLength: m['averagePeriodLength'] as int? ?? 5,
         notificationsEnabled: m['notificationsEnabled'] as bool? ?? true,
         reminderHour: m['reminderHour'] as int? ?? 9,
         reminderMinute: m['reminderMinute'] as int? ?? 0,
-        createdAt:
-            (m['createdAt'] as Timestamp?)?.toDate() ?? DateTime.now(),
+        createdAt: JsonDates.decode(m['createdAt']) ?? DateTime.now(),
         trackingMode: TrackingMode.fromId(m['trackingMode'] as String?),
         setupComplete: m['setupComplete'] as bool? ?? false,
-        dueDate: (m['dueDate'] as Timestamp?)?.toDate(),
-        lastMenstrualPeriod:
-            (m['lastMenstrualPeriod'] as Timestamp?)?.toDate(),
+        dueDate: JsonDates.decode(m['dueDate']),
+        lastMenstrualPeriod: JsonDates.decode(m['lastMenstrualPeriod']),
         age: m['age'] as int?,
         hasIrregularCycles: m['hasIrregularCycles'] as bool?,
         hasMedicalConditions: m['hasMedicalConditions'] as bool?,
@@ -202,7 +243,6 @@ class UserProfile {
             List<String>.from(m['medicalConditions'] as List? ?? const []),
         previousPregnancies: m['previousPregnancies'] as int?,
         takingPrenatalVitamins: m['takingPrenatalVitamins'] as bool?,
-        // Backwards-compat: older profiles stored a single linkedPartnerUid.
         linkedPartnerUids: m['linkedPartnerUids'] != null
             ? List<String>.from(m['linkedPartnerUids'] as List)
             : (m['linkedPartnerUid'] is String &&
@@ -211,5 +251,14 @@ class UserProfile {
                 : const <String>[]),
         partnerOnlyMode: m['partnerOnlyMode'] as bool? ?? false,
         hasSeenTutorial: m['hasSeenTutorial'] as bool? ?? false,
+        notifyPeriod: m['notifyPeriod'] as bool? ?? true,
+        notifyFertile: m['notifyFertile'] as bool? ?? true,
+        notifyDailyLog: m['notifyDailyLog'] as bool? ?? true,
+        notifyVitamins: m['notifyVitamins'] as bool? ?? true,
+        notifyTrimester: m['notifyTrimester'] as bool? ?? true,
+        themeId: m['themeId'] as String? ?? 'blossom',
+        themePrefs: m['themePrefs'] is Map
+            ? Map<String, dynamic>.from(m['themePrefs'] as Map)
+            : const {},
       );
 }

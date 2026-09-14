@@ -6,6 +6,7 @@ import '../core/constants.dart';
 import '../core/theme/app_colors.dart';
 import '../models/cycle_prediction.dart';
 import '../models/daily_log.dart';
+import '../models/tracking_mode.dart';
 import '../providers/cycle_provider.dart';
 import '../widgets/gradient_button.dart';
 
@@ -50,6 +51,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
     _hydrate(existing);
 
     final phase = cycle.phaseFor(widget.date);
+    final mode = cycle.trackingMode;
 
     return Scaffold(
       appBar: AppBar(
@@ -57,30 +59,33 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(20, 8, 20, 32),
+          padding: EdgeInsets.fromLTRB(20, 8, 20, 32),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               _phaseBanner(phase),
-              const SizedBox(height: 24),
-              _sectionLabel('Flow'),
-              _flowSelector(),
-              const SizedBox(height: 24),
-              _sectionLabel('Symptoms'),
-              _chipGroup(Symptoms.physical, _symptoms),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
+              if (Symptoms.showsFlow(mode)) ...[
+                _sectionLabel('Flow'),
+                _flowSelector(),
+                SizedBox(height: 24),
+              ],
+              _sectionLabel(
+                  mode == TrackingMode.pregnancy ? 'How you feel' : 'Symptoms'),
+              _chipGroup(Symptoms.physicalFor(mode), _symptoms),
+              SizedBox(height: 24),
               _sectionLabel('Mood'),
               _chipGroup(Symptoms.moods, _moods),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
               _sectionLabel('Notes'),
               TextField(
                 controller: _notesCtrl,
                 maxLines: 4,
-                decoration: const InputDecoration(
+                decoration: InputDecoration(
                   hintText: 'How are you feeling today?',
                 ),
               ),
-              const SizedBox(height: 28),
+              SizedBox(height: 28),
               GradientButton(
                 label: 'Save',
                 loading: _saving,
@@ -95,10 +100,10 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
   }
 
   Widget _sectionLabel(String text) => Padding(
-        padding: const EdgeInsets.only(bottom: 10),
+        padding: EdgeInsets.only(bottom: 10),
         child: Text(
           text,
-          style: const TextStyle(
+          style: TextStyle(
             color: AppColors.textPrimary,
             fontSize: 16,
             fontWeight: FontWeight.w700,
@@ -159,16 +164,44 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
 
   Widget _phaseBanner(CyclePhase phase) {
     final (color, label, icon) = switch (phase) {
-      CyclePhase.period => (AppColors.period, 'Period day', Icons.water_drop_rounded),
-      CyclePhase.fertile => (AppColors.fertile, 'Fertile window', Icons.eco_rounded),
-      CyclePhase.ovulation => (AppColors.ovulation, 'Ovulation', Icons.brightness_5_rounded),
-      CyclePhase.predicted => (AppColors.predicted, 'Predicted period', Icons.calendar_today_rounded),
-      CyclePhase.follicular => (AppColors.accent, 'Follicular phase', Icons.eco_outlined),
-      CyclePhase.luteal => (AppColors.accentDark, 'Luteal phase', Icons.nights_stay_rounded),
-      CyclePhase.unknown => (AppColors.textTertiary, '—', Icons.help_outline_rounded),
+      CyclePhase.period => (
+          AppColors.period,
+          'Period day',
+          Icons.water_drop_rounded
+        ),
+      CyclePhase.fertile => (
+          AppColors.fertile,
+          'Fertile window',
+          Icons.eco_rounded
+        ),
+      CyclePhase.ovulation => (
+          AppColors.ovulation,
+          'Ovulation',
+          Icons.brightness_5_rounded
+        ),
+      CyclePhase.predicted => (
+          AppColors.predicted,
+          'Predicted period',
+          Icons.calendar_today_rounded
+        ),
+      CyclePhase.follicular => (
+          AppColors.accent,
+          'Follicular phase',
+          Icons.eco_outlined
+        ),
+      CyclePhase.luteal => (
+          AppColors.accentDark,
+          'Luteal phase',
+          Icons.nights_stay_rounded
+        ),
+      CyclePhase.unknown => (
+          AppColors.textTertiary,
+          '-',
+          Icons.help_outline_rounded
+        ),
     };
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(16),
@@ -176,7 +209,7 @@ class _DayDetailScreenState extends State<DayDetailScreen> {
       child: Row(
         children: [
           Icon(icon, color: color),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Text(
             label,
             style: TextStyle(

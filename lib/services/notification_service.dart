@@ -4,8 +4,14 @@ import 'package:timezone/data/latest_all.dart' as tz;
 import 'package:timezone/timezone.dart' as tz;
 
 import '../core/constants.dart';
+import '../models/cycle_prediction.dart';
+import '../models/daily_log.dart';
+import '../models/pregnancy_status.dart';
+import '../models/tracking_mode.dart';
+import '../models/user_profile.dart';
+import 'personalization_service.dart';
 
-/// Wraps flutter_local_notifications for predictive period reminders.
+/// Local reminders only. Copy is built from the person's name, mode, and logs.
 class NotificationService {
   NotificationService._();
   static final instance = NotificationService._();
@@ -41,9 +47,14 @@ class NotificationService {
         ?.requestNotificationsPermission();
   }
 
-  Future<void> cancelAll() => _plugin.cancelAll();
+  Future<void> cancelAll() async {
+    try {
+      await _plugin.cancelAll();
+    } catch (e) {
+      if (kDebugMode) print('cancelAll failed: $e');
+    }
+  }
 
-  /// All lead-up offsets we schedule notifications for, ordered far → near.
   static const _periodLeadDays = <int, int>{
     3: AppConstants.notifPeriod3Days,
     2: AppConstants.notifPeriod2Days,
@@ -56,9 +67,6 @@ class NotificationService {
     1: AppConstants.notifFertile1Day,
   };
 
-  /// Time of day at which scheduled reminders fire. Defaults to 9:00.
-  /// [CycleProvider] calls [setReminderTime] before scheduling so the user's
-  /// preferred time from their profile is respected.
   int _reminderHour = 9;
   int _reminderMinute = 0;
 
@@ -67,22 +75,109 @@ class NotificationService {
     _reminderMinute = minute.clamp(0, 59);
   }
 
-  /// Cancel any previously scheduled phase reminders. Useful before
-  /// re-scheduling or when the user disables notifications.
   Future<void> cancelAllPhaseReminders() async {
     for (final id in AppConstants.notifAllPhaseIds) {
-      await _plugin.cancel(id);
+      try {
+        await _plugin.cancel(id);
+      } catch (e) {
+        if (kDebugMode) print('cancel($id) failed: $e');
+      }
     }
   }
 
-  /// Schedule period reminders 3, 2, and 1 day(s) before [nextPeriodStart].
-  /// Skips any that would fire in the past.
+  /// Rebuilds every reminder from the person's profile, mode, and prediction.
+  Future<void> rescheduleForPerson({
+    required UserProfile profile,
+    required CyclePrediction? prediction,
+    required CyclePhase phase,
+    required List<DailyLog> logs,
+    PregnancyStatus? pregnancy,
+  }) async {
+    await cancelAllPhaseReminders();
+    if (!profile.notificationsEnabled) return;
+
+    setReminderTime(
+      hour: profile.reminderHour,
+      minute: profile.reminderMinute,
+    );
+
+    final mode = profile.trackingMode ?? TrackingMode.period;
+
+    if (mode == TrackingMode.pregnancy) {
+      if (profile.notifyTrimester && pregnancy != null) {
+        final next = pregnancy.nextTrimesterStart;
+        if (next != null) {
+          await scheduleTrimesterReminder(
+            nextTrimesterStart: next,
+            trimesterLabel: pregnancy.nextTrimesterLabel ?? 'Next trimester',
+            profile: profile,
+          );
+        }
+        await _scheduleWeeklyPregnancy(profile, pregnancy);
+      }
+      if (profile.notifyVitamins && profile.takingPrenatalVitamins == true) {
+        await scheduleVitaminReminder(profile: profile);
+      }
+    } else if (prediction != null) {
+      if (profile.notifyPeriod) {
+        await schedulePeriodReminder(
+          nextPeriodStart: prediction.nextPeriodStart,
+          profile: profile,
+          logs: logs,
+          isLate: prediction.isLate,
+        );
+      }
+      if (profile.notifyFertile) {
+        await scheduleFertileWindowReminder(
+          fertileWindowStart: prediction.fertileWindowStart,
+          ovulationDay: prediction.ovulationDay,
+          profile: profile,
+          mode: mode,
+        );
+      }
+      if (profile.notifyVitamins &&
+          mode == TrackingMode.conception &&
+          profile.takingPrenatalVitamins == true) {
+        await scheduleVitaminReminder(profile: profile);
+      }
+    }
+
+    if (profile.notifyDailyLog) {
+      await scheduleDailyLogReminder(
+        hour: 20,
+        minute: 0,
+        profile: profile,
+        phase: phase,
+        mode: mode,
+        pregnancy: pregnancy,
+      );
+    }
+  }
+
   Future<void> schedulePeriodReminder({
     required DateTime nextPeriodStart,
+    UserProfile? profile,
+    List<DailyLog> logs = const [],
+    bool isLate = false,
   }) async {
     for (final entry in _periodLeadDays.entries) {
       await _plugin.cancel(entry.value);
     }
+    await _plugin.cancel(AppConstants.notifPeriodToday);
+    await _plugin.cancel(AppConstants.notifPeriodLate);
+
+    if (isLate) {
+      final (title, body) = PersonalizationService.periodLate(profile);
+      final at = _nextOccurrence(_reminderHour, _reminderMinute);
+      await _schedule(
+        id: AppConstants.notifPeriodLate,
+        title: title,
+        body: body,
+        at: at,
+      );
+      return;
+    }
+
     final now = DateTime.now();
     for (final entry in _periodLeadDays.entries) {
       final days = entry.key;
@@ -91,33 +186,43 @@ class NotificationService {
       final at = DateTime(
           lead.year, lead.month, lead.day, _reminderHour, _reminderMinute);
       if (at.isBefore(now)) continue;
-
-      final (title, body) = switch (days) {
-        3 => (
-            'Your period is in 3 days 🌸',
-            'Time to stock up and listen to your body.',
-          ),
-        2 => (
-            'Your period is in 2 days 🌸',
-            'Take it slow and prioritize rest.',
-          ),
-        _ => (
-            'Your period starts tomorrow 🌸',
-            'Get cozy — you\'ve got this.',
-          ),
-      };
+      final (title, body) = PersonalizationService.periodLead(
+        profile: profile,
+        days: days,
+        recentLogs: logs,
+      );
       await _schedule(id: id, title: title, body: body, at: at);
+    }
+
+    final todayAt = DateTime(
+      nextPeriodStart.year,
+      nextPeriodStart.month,
+      nextPeriodStart.day,
+      _reminderHour,
+      _reminderMinute,
+    );
+    if (!todayAt.isBefore(now)) {
+      final (title, body) = PersonalizationService.periodToday(profile);
+      await _schedule(
+        id: AppConstants.notifPeriodToday,
+        title: title,
+        body: body,
+        at: todayAt,
+      );
     }
   }
 
-  /// Schedule fertile-window reminders 3, 2, and 1 day(s) before
-  /// [fertileWindowStart]. Skips any that would fire in the past.
   Future<void> scheduleFertileWindowReminder({
     required DateTime fertileWindowStart,
+    DateTime? ovulationDay,
+    UserProfile? profile,
+    TrackingMode mode = TrackingMode.period,
   }) async {
     for (final entry in _fertileLeadDays.entries) {
       await _plugin.cancel(entry.value);
     }
+    await _plugin.cancel(AppConstants.notifOvulation);
+
     final now = DateTime.now();
     for (final entry in _fertileLeadDays.entries) {
       final days = entry.key;
@@ -126,55 +231,103 @@ class NotificationService {
       final at = DateTime(
           lead.year, lead.month, lead.day, _reminderHour, _reminderMinute);
       if (at.isBefore(now)) continue;
-
-      final (title, body) = switch (days) {
-        3 => (
-            'High-fertility window in 3 days 🌿',
-            'Your most fertile days are coming up soon.',
-          ),
-        2 => (
-            'High-fertility window in 2 days 🌿',
-            'Get ready — peak days are nearly here.',
-          ),
-        _ => (
-            'High-fertility window starts tomorrow 🌿',
-            'Your highest-chance days begin tomorrow.',
-          ),
-      };
+      final (title, body) = PersonalizationService.fertileLead(
+        profile: profile,
+        days: days,
+        mode: mode,
+      );
       await _schedule(id: id, title: title, body: body, at: at);
+    }
+
+    if (ovulationDay != null) {
+      final at = DateTime(
+        ovulationDay.year,
+        ovulationDay.month,
+        ovulationDay.day,
+        _reminderHour,
+        _reminderMinute,
+      );
+      if (!at.isBefore(now)) {
+        final (title, body) = PersonalizationService.ovulationDay(
+          profile: profile,
+          mode: mode,
+        );
+        await _schedule(
+          id: AppConstants.notifOvulation,
+          title: title,
+          body: body,
+          at: at,
+        );
+      }
     }
   }
 
-  /// For pregnancy mode: remind about upcoming trimester milestones 3 days
-  /// before.
   Future<void> scheduleTrimesterReminder({
     required DateTime nextTrimesterStart,
     required String trimesterLabel,
+    UserProfile? profile,
   }) async {
     await _plugin.cancel(AppConstants.notifTrimester);
     final lead = nextTrimesterStart.subtract(const Duration(days: 3));
     final at = DateTime(
         lead.year, lead.month, lead.day, _reminderHour, _reminderMinute);
     if (at.isBefore(DateTime.now())) return;
-
+    final (title, body) = PersonalizationService.trimester(
+      profile: profile,
+      trimesterLabel: trimesterLabel,
+    );
     await _schedule(
       id: AppConstants.notifTrimester,
-      title: '$trimesterLabel coming up 🤰',
-      body: 'Begins in about 3 days.',
+      title: title,
+      body: body,
       at: at,
     );
   }
 
-  /// One-off notification for the user to verify the plumbing actually works
-  /// on their device (permissions, channels, etc.). Shows an immediate
-  /// notification (so we don't depend on the scheduler) and *throws* on any
-  /// failure so the UI can surface the real error.
-  Future<void> sendTestNotification() async {
-    await _plugin.cancel(AppConstants.notifTest);
+  Future<void> _scheduleWeeklyPregnancy(
+      UserProfile profile, PregnancyStatus status) async {
+    await _plugin.cancel(AppConstants.notifPregnancyWeekly);
+    final nextMonday = _nextOccurrence(_reminderHour, _reminderMinute);
+    final (title, body) =
+        PersonalizationService.pregnancyWeek(profile, status.weeksAlong);
+    await _schedule(
+      id: AppConstants.notifPregnancyWeekly,
+      title: title,
+      body: body,
+      at: nextMonday,
+      repeatDaily: false,
+    );
+  }
+
+  Future<void> scheduleVitaminReminder({required UserProfile profile}) async {
+    await _plugin.cancel(AppConstants.notifVitamins);
+    final now = DateTime.now();
+    var at =
+        DateTime(now.year, now.month, now.day, _reminderHour, _reminderMinute);
+    if (at.isBefore(now)) at = at.add(const Duration(days: 1));
+    final (title, body) = PersonalizationService.vitamins(profile);
+    await _schedule(
+      id: AppConstants.notifVitamins,
+      title: title,
+      body: body,
+      at: at,
+      repeatDaily: true,
+    );
+  }
+
+  Future<void> sendTestNotification({UserProfile? profile}) async {
+    await init();
+    await requestPermissions();
+    try {
+      await _plugin.cancel(AppConstants.notifTest);
+    } catch (_) {
+      // Older release builds can fail cancel under R8; still show the test.
+    }
+    final name = PersonalizationService.firstName(profile);
     await _plugin.show(
       AppConstants.notifTest,
-      'Cyclus notifications work ✅',
-      'You\'ll get reminders 3, 2, and 1 day before your period and fertile window.',
+      '$name, Cyclus is ready',
+      'Reminders stay on this phone and use your name, mode, and usual symptoms.',
       const NotificationDetails(
         android: AndroidNotificationDetails(
           'cycle_reminders',
@@ -188,18 +341,38 @@ class NotificationService {
     );
   }
 
-  Future<void> scheduleDailyLogReminder({int hour = 20, int minute = 0}) async {
+  Future<void> scheduleDailyLogReminder({
+    int hour = 20,
+    int minute = 0,
+    UserProfile? profile,
+    CyclePhase phase = CyclePhase.unknown,
+    TrackingMode mode = TrackingMode.period,
+    PregnancyStatus? pregnancy,
+  }) async {
     await _plugin.cancel(AppConstants.notifLogReminder);
     final now = DateTime.now();
     var at = DateTime(now.year, now.month, now.day, hour, minute);
     if (at.isBefore(now)) at = at.add(const Duration(days: 1));
+    final (title, body) = PersonalizationService.dailyLog(
+      profile: profile,
+      phase: phase,
+      mode: mode,
+      pregnancy: pregnancy,
+    );
     await _schedule(
       id: AppConstants.notifLogReminder,
-      title: 'How are you feeling today? 💗',
-      body: 'Tap to log your symptoms and mood.',
+      title: title,
+      body: body,
       at: at,
       repeatDaily: true,
     );
+  }
+
+  DateTime _nextOccurrence(int hour, int minute) {
+    final now = DateTime.now();
+    var at = DateTime(now.year, now.month, now.day, hour, minute);
+    if (at.isBefore(now)) at = at.add(const Duration(days: 1));
+    return at;
   }
 
   Future<void> _schedule({
@@ -228,12 +401,10 @@ class NotificationService {
         androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
         uiLocalNotificationDateInterpretation:
             UILocalNotificationDateInterpretation.absoluteTime,
-        matchDateTimeComponents:
-            repeatDaily ? DateTimeComponents.time : null,
+        matchDateTimeComponents: repeatDaily ? DateTimeComponents.time : null,
       );
     } catch (e) {
       if (kDebugMode) print('Notification schedule failed: $e');
     }
   }
 }
-

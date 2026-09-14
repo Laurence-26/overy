@@ -1,21 +1,46 @@
 import 'package:flutter/material.dart';
 import '../core/theme/app_colors.dart';
+import '../models/tracking_mode.dart';
+import 'surface_panel.dart';
 
 class PhaseLegend extends StatelessWidget {
-  const PhaseLegend({super.key});
+  final TrackingMode mode;
+  const PhaseLegend({super.key, this.mode = TrackingMode.period});
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      spacing: 16,
-      runSpacing: 8,
-      children: const [
-        _LegendDot(color: AppColors.period, label: 'Period'),
-        _LegendDot(color: AppColors.predicted, label: 'Predicted'),
-        _LegendDot(color: AppColors.fertile, label: 'Fertile'),
-        _LegendDot(color: AppColors.ovulation, label: 'Ovulation'),
-        _LegendDot(color: Colors.white, label: 'Safe', bordered: true),
-      ],
+    final dots = switch (mode) {
+      TrackingMode.pregnancy => [
+          _LegendDot(color: AppColors.accentLight, label: '1st trimester'),
+          _LegendDot(color: AppColors.accent, label: '2nd'),
+          _LegendDot(color: AppColors.accentDark, label: '3rd'),
+        ],
+      TrackingMode.conception => [
+          _LegendDot(color: AppColors.period, label: 'Period'),
+          _LegendDot(color: AppColors.fertile, label: 'High chance'),
+          _LegendDot(color: AppColors.ovulation, label: 'Peak'),
+          _LegendDot(color: AppColors.safe, label: 'Waiting'),
+        ],
+      TrackingMode.period => [
+          _LegendDot(color: AppColors.period, label: 'Period'),
+          _LegendDot(color: AppColors.predicted, label: 'Predicted'),
+          _LegendDot(color: AppColors.fertile, label: 'Fertile'),
+          _LegendDot(color: AppColors.ovulation, label: 'Ovulation'),
+          _LegendDot(color: AppColors.safe, label: 'Safe'),
+        ],
+    };
+
+    return SurfacePanel(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      elevated: false,
+      opacity: 0.55,
+      tint: AppColors.accent,
+      child: Wrap(
+        spacing: 14,
+        runSpacing: 8,
+        alignment: WrapAlignment.center,
+        children: dots,
+      ),
     );
   }
 }
@@ -23,11 +48,9 @@ class PhaseLegend extends StatelessWidget {
 class _LegendDot extends StatelessWidget {
   final Color color;
   final String label;
-  final bool bordered;
   const _LegendDot({
     required this.color,
     required this.label,
-    this.bordered = false,
   });
 
   @override
@@ -36,23 +59,26 @@ class _LegendDot extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Container(
-          width: 10,
-          height: 10,
+          width: 11,
+          height: 11,
           decoration: BoxDecoration(
             color: color,
             shape: BoxShape.circle,
-            border: bordered
-                ? Border.all(color: AppColors.primaryLight, width: 1)
-                : null,
+            boxShadow: [
+              BoxShadow(
+                color: color.withOpacity(0.45),
+                blurRadius: 5,
+              ),
+            ],
           ),
         ),
         const SizedBox(width: 6),
         Text(
           label,
-          style: const TextStyle(
-            color: AppColors.textSecondary,
+          style: TextStyle(
+            color: AppColors.textPrimary,
             fontSize: 12,
-            fontWeight: FontWeight.w500,
+            fontWeight: FontWeight.w700,
           ),
         ),
       ],

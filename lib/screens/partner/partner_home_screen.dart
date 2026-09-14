@@ -1,4 +1,3 @@
-import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
@@ -12,12 +11,13 @@ import '../../models/tracking_mode.dart';
 import '../../models/user_profile.dart';
 import '../../providers/auth_provider.dart';
 import '../../providers/cycle_provider.dart';
+import '../../services/cycle_service.dart';
 import '../../services/partner_service.dart';
+import '../../services/partner_share_io.dart';
 import '../../services/prediction_engine.dart';
 import '../../widgets/cycle_ring.dart';
 import '../../widgets/gradient_button.dart';
 import '../../widgets/stat_card.dart';
-import '../welcome_screen.dart';
 
 /// Standalone home for users who signed in as a partner.
 /// Shows a read-only summary of the *linked partner's* cycle data.
@@ -48,15 +48,15 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Partner view'),
+        title: Text('Partner view'),
         actions: [
           PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert_rounded),
+            icon: Icon(Icons.more_vert_rounded),
             onSelected: (v) {
               if (v == 'signout') _signOut(context);
               if (v == 'delete') _deleteAccount(context);
             },
-            itemBuilder: (_) => const [
+            itemBuilder: (_) => [
               PopupMenuItem(
                 value: 'signout',
                 child: Row(children: [
@@ -110,29 +110,16 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
     final cycle = context.read<CycleProvider>();
     final auth = context.read<AuthProvider>();
     final messenger = ScaffoldMessenger.of(context);
-    final navigator = Navigator.of(context, rootNavigator: true);
     try {
       await cycle.wipeAccountData();
-      final result = await auth.deleteFirebaseUser();
-      if (result == DeleteAccountResult.requiresReauth) {
-        messenger.showSnackBar(const SnackBar(
-          content: Text('Please sign in again, then delete the account.'),
-          backgroundColor: AppColors.warning,
-          duration: Duration(seconds: 5),
-        ));
-        await auth.signOut();
-      } else if (result == DeleteAccountResult.failed) {
+      final result = await auth.deleteLocalUser();
+      if (result == DeleteAccountResult.failed) {
         messenger.showSnackBar(SnackBar(
           content: Text(auth.error ?? 'Could not delete account'),
           backgroundColor: AppColors.error,
         ));
         return;
       }
-      if (!context.mounted) return;
-      navigator.pushAndRemoveUntil(
-        MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-        (_) => false,
-      );
     } catch (e) {
       messenger.showSnackBar(SnackBar(
         content: Text('Delete failed: $e'),
@@ -145,28 +132,21 @@ class _PartnerHomeScreenState extends State<PartnerHomeScreen> {
     final confirm = await showDialog<bool>(
       context: context,
       builder: (_) => AlertDialog(
-        title: const Text('Sign out?'),
+        title: Text('Sign out?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(false),
-            child: const Text('Cancel'),
+            child: Text('Cancel'),
           ),
           TextButton(
             onPressed: () => Navigator.of(context).pop(true),
-            child: const Text('Sign out',
-                style: TextStyle(color: AppColors.error)),
+            child: Text('Sign out', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
     );
     if (confirm != true || !context.mounted) return;
-    final navigator = Navigator.of(context, rootNavigator: true);
     await context.read<AuthProvider>().signOut();
-    if (!context.mounted) return;
-    navigator.pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const WelcomeScreen()),
-      (_) => false,
-    );
   }
 }
 
@@ -181,6 +161,26 @@ class _PartnerNotLinkedViewState extends State<_PartnerNotLinkedView> {
   final _ctrl = TextEditingController();
   final _partnerSvc = PartnerService();
   bool _connecting = false;
+  bool _importing = false;
+
+  Future<void> _importFile() async {
+    setState(() => _importing = true);
+    try {
+      final data = await PartnerShareIo.pickSnapshot();
+      if (data == null) return;
+      await context.read<CycleProvider>().importPartnerSnapshot(data);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Imported her cycle'),
+          backgroundColor: AppColors.success,
+        ));
+      }
+    } catch (e) {
+      _err(e.toString().replaceFirst('Exception:', ''));
+    } finally {
+      if (mounted) setState(() => _importing = false);
+    }
+  }
 
   Future<void> _connect() async {
     final code = _ctrl.text.trim();
@@ -203,12 +203,12 @@ class _PartnerNotLinkedViewState extends State<_PartnerNotLinkedView> {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
           content: Text(
-              'Connected to ${invite.partnerDisplayName ?? "your partner"} 💕'),
+              'Connected to ${invite.partnerDisplayName ?? "your partner"}'),
           backgroundColor: AppColors.success,
         ));
       }
     } catch (e) {
-      _err(e.toString().replaceFirst('Exception: ', ''));
+      _err(e.toString().replaceFirst('Exception:', ''));
     } finally {
       if (mounted) setState(() => _connecting = false);
     }
@@ -223,25 +223,23 @@ class _PartnerNotLinkedViewState extends State<_PartnerNotLinkedView> {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+      padding: EdgeInsets.fromLTRB(24, 24, 24, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           Container(
             width: 96,
             height: 96,
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               shape: BoxShape.circle,
               gradient: AppColors.primaryGradient,
             ),
-            child: const Icon(Icons.favorite_rounded,
-                color: Colors.white, size: 48),
-          )
-              .animate(),
-          const SizedBox(height: 24),
-          const Text(
-            'Connect to your partner',
+            child: Icon(Icons.favorite_rounded, color: Colors.white, size: 48),
+          ).animate(),
+          SizedBox(height: 24),
+          Text(
+            'Import her cycle file',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textPrimary,
@@ -249,9 +247,9 @@ class _PartnerNotLinkedViewState extends State<_PartnerNotLinkedView> {
               fontWeight: FontWeight.w700,
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Ask your partner to share their 6-digit invite code with you. Find it in their app under Profile → Partner sharing.',
+          SizedBox(height: 8),
+          Text(
+            'Ask her to tap Profile > Partner sharing > Share my cycle file, then send it to this phone. Bluetooth, Nearby Share, WhatsApp, or a USB cable all work offline.',
             textAlign: TextAlign.center,
             style: TextStyle(
               color: AppColors.textSecondary,
@@ -259,25 +257,41 @@ class _PartnerNotLinkedViewState extends State<_PartnerNotLinkedView> {
               fontSize: 14,
             ),
           ),
-          const SizedBox(height: 32),
+          SizedBox(height: 28),
+          GradientButton(
+            label: 'Import cycle file',
+            loading: _importing,
+            icon: Icons.file_open_rounded,
+            onPressed: _importing ? null : _importFile,
+          ),
+          SizedBox(height: 28),
+          Text(
+            'Same phone? Enter her PIN',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: AppColors.textSecondary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          SizedBox(height: 12),
           TextField(
             controller: _ctrl,
             autofocus: false,
             keyboardType: TextInputType.number,
             maxLength: 6,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 28,
               fontWeight: FontWeight.w700,
               letterSpacing: 6,
               color: AppColors.primary,
             ),
-            decoration: const InputDecoration(
+            decoration: InputDecoration(
               hintText: '000000',
               counterText: '',
             ),
           ),
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           GradientButton(
             label: 'Connect',
             loading: _connecting,
@@ -308,39 +322,27 @@ class _PartnerLinkedView extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-      stream: FirebaseFirestore.instance
-          .collection('users')
-          .doc(partnerUid)
-          .snapshots(),
+    return StreamBuilder<UserProfile?>(
+      stream: CycleService(partnerUid).watchProfile(),
       builder: (ctx, profileSnap) {
-        if (profileSnap.connectionState == ConnectionState.waiting) {
-          return const Center(child: CircularProgressIndicator());
+        if (profileSnap.connectionState == ConnectionState.waiting &&
+            !profileSnap.hasData) {
+          return Center(child: CircularProgressIndicator());
         }
-        if (profileSnap.hasError ||
-            !profileSnap.hasData ||
-            !profileSnap.data!.exists) {
+        if (profileSnap.hasError || profileSnap.data == null) {
           return _PartnerUnreachable(
             partnerUid: partnerUid,
             hasError: profileSnap.hasError,
             error: profileSnap.error?.toString(),
           );
         }
-        final partner = UserProfile.fromMap(profileSnap.data!.data()!);
+        final partner = profileSnap.data!;
         final mode = partner.trackingMode ?? TrackingMode.period;
 
-        return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-          stream: FirebaseFirestore.instance
-              .collection('users')
-              .doc(partnerUid)
-              .collection('cycles')
-              .orderBy('startDate', descending: true)
-              .limit(10)
-              .snapshots(),
+        return StreamBuilder<List<Cycle>>(
+          stream: CycleService(partnerUid).watchCycles(),
           builder: (ctx, cyclesSnap) {
-            final cycles = (cyclesSnap.data?.docs ?? [])
-                .map((d) => Cycle.fromMap(d.data()))
-                .toList();
+            final cycles = cyclesSnap.data ?? const <Cycle>[];
             return _PartnerStatusBody(
               partner: partner,
               cycles: cycles,
@@ -371,12 +373,12 @@ class _PartnerStatusBody extends StatelessWidget {
         partner.email.split('@').first;
 
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+      padding: EdgeInsets.fromLTRB(20, 16, 20, 32),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           _PartnerHeader(name: partnerName, mode: mode),
-          const SizedBox(height: 24),
+          SizedBox(height: 24),
           if (mode == TrackingMode.pregnancy)
             _PregnancyBody(partner: partner)
           else
@@ -395,7 +397,7 @@ class _PartnerHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
         gradient: AppColors.primaryGradient,
         borderRadius: BorderRadius.circular(24),
@@ -407,29 +409,29 @@ class _PartnerHeader extends StatelessWidget {
             backgroundColor: Colors.white.withOpacity(0.25),
             child: Text(
               name.isNotEmpty ? name[0].toUpperCase() : '?',
-              style: const TextStyle(
+              style: TextStyle(
                 color: Colors.white,
                 fontSize: 22,
                 fontWeight: FontWeight.w700,
               ),
             ),
           ),
-          const SizedBox(width: 14),
+          SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   'Following $name',
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
                     fontSize: 18,
                   ),
                 ),
-                const SizedBox(height: 2),
+                SizedBox(height: 2),
                 Text(
-                  '${mode.displayName} • Updated live',
+                  '${mode.displayName} * Updated live',
                   style: TextStyle(
                     color: Colors.white.withOpacity(0.85),
                     fontSize: 12,
@@ -438,7 +440,7 @@ class _PartnerHeader extends StatelessWidget {
               ],
             ),
           ),
-          const Icon(Icons.favorite_rounded, color: Colors.white),
+          Icon(Icons.favorite_rounded, color: Colors.white),
         ],
       ),
     );
@@ -476,17 +478,16 @@ class _CycleBody extends StatelessWidget {
           'Your partner hasn\'t logged any cycle data yet. The home screen will fill in as soon as they do.');
     }
 
-    final fertileLabel = mode == TrackingMode.conception
-        ? 'High-chance days'
-        : 'Fertile window';
+    final fertileLabel =
+        mode == TrackingMode.conception ? 'High-chance days' : 'Fertile window';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Center(child: CycleRing(currentCycle: current, prediction: p)),
-        const SizedBox(height: 28),
+        SizedBox(height: 28),
         _phaseTip(phase, mode),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         Row(children: [
           Expanded(
             child: StatCard(
@@ -497,18 +498,18 @@ class _CycleBody extends StatelessWidget {
               color: AppColors.period,
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: StatCard(
               icon: Icons.eco_rounded,
               label: fertileLabel,
               value:
-                  '${DateFormat('MMM d').format(p.fertileWindowStart)} – ${DateFormat('MMM d').format(p.fertileWindowEnd)}',
+                  '${DateFormat('MMM d').format(p.fertileWindowStart)} - ${DateFormat('MMM d').format(p.fertileWindowEnd)}',
               color: AppColors.fertile,
             ),
           ),
         ]),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         Row(children: [
           Expanded(
             child: StatCard(
@@ -519,7 +520,7 @@ class _CycleBody extends StatelessWidget {
               color: AppColors.accent,
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: StatCard(
               icon: Icons.verified_rounded,
@@ -529,7 +530,7 @@ class _CycleBody extends StatelessWidget {
             ),
           ),
         ]),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         _SupportTipCard(phase: phase, mode: mode),
       ],
     );
@@ -537,8 +538,7 @@ class _CycleBody extends StatelessWidget {
 
   Widget _phaseTip(CyclePhase phase, TrackingMode mode) {
     final (label, color) = switch (phase) {
-      CyclePhase.period =>
-        ('She\'s on her period right now', AppColors.period),
+      CyclePhase.period => ('She\'s on her period right now', AppColors.period),
       CyclePhase.fertile => mode == TrackingMode.conception
           ? ('High chance to conceive', AppColors.fertile)
           : ('In fertile window', AppColors.fertile),
@@ -549,14 +549,14 @@ class _CycleBody extends StatelessWidget {
       CyclePhase.unknown => ('Cycle phase unknown', AppColors.textTertiary),
     };
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: color.withOpacity(0.12),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Row(children: [
         Icon(Icons.info_outline, color: color),
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         Expanded(
           child: Text(
             label,
@@ -572,19 +572,18 @@ class _CycleBody extends StatelessWidget {
   }
 
   Widget _emptyCard(String body) => Container(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
           children: [
-            const Icon(Icons.hourglass_empty_rounded,
-                color: AppColors.textSecondary),
-            const SizedBox(width: 12),
+            Icon(Icons.hourglass_empty_rounded, color: AppColors.textSecondary),
+            SizedBox(width: 12),
             Expanded(
-              child: Text(body,
-                  style: const TextStyle(color: AppColors.textSecondary)),
+              child:
+                  Text(body, style: TextStyle(color: AppColors.textSecondary)),
             ),
           ],
         ),
@@ -605,12 +604,12 @@ class _PregnancyBody extends StatelessWidget {
     }
     if (status == null) {
       return Container(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(24),
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Text(
+        child: Text(
           'Your partner hasn\'t set a due date yet.',
           style: TextStyle(color: AppColors.textSecondary),
         ),
@@ -630,7 +629,7 @@ class _PregnancyBody extends StatelessWidget {
                   value: status.progress,
                   strokeWidth: 18,
                   backgroundColor: AppColors.accentLight.withOpacity(0.35),
-                  valueColor: const AlwaysStoppedAnimation(AppColors.accent),
+                  valueColor: AlwaysStoppedAnimation(AppColors.accent),
                   strokeCap: StrokeCap.round,
                 ),
               ),
@@ -638,20 +637,20 @@ class _PregnancyBody extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text('Week ${status.weeksAlong}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: AppColors.accent,
                         fontSize: 36,
                         fontWeight: FontWeight.w700,
                       )),
                   Text('${status.daysIntoWeek} days',
-                      style: const TextStyle(
+                      style: TextStyle(
                           color: AppColors.textSecondary, fontSize: 12)),
                 ],
               ),
             ]),
           ),
         ),
-        const SizedBox(height: 24),
+        SizedBox(height: 24),
         Row(children: [
           Expanded(
             child: StatCard(
@@ -662,7 +661,7 @@ class _PregnancyBody extends StatelessWidget {
               color: AppColors.period,
             ),
           ),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: StatCard(
               icon: Icons.eco_rounded,
@@ -672,14 +671,14 @@ class _PregnancyBody extends StatelessWidget {
             ),
           ),
         ]),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         Container(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.all(16),
           decoration: BoxDecoration(
             color: AppColors.accent.withOpacity(0.10),
             borderRadius: BorderRadius.circular(16),
           ),
-          child: const Row(children: [
+          child: Row(children: [
             Icon(Icons.tips_and_updates_rounded, color: AppColors.accent),
             SizedBox(width: 10),
             Expanded(
@@ -708,18 +707,18 @@ class _SupportTipCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final tip = _tipFor(phase, mode);
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: AppColors.accentLight.withOpacity(0.30),
         borderRadius: BorderRadius.circular(16),
       ),
       child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-        const Icon(Icons.tips_and_updates_rounded, color: AppColors.accent),
-        const SizedBox(width: 10),
+        Icon(Icons.tips_and_updates_rounded, color: AppColors.accent),
+        SizedBox(width: 10),
         Expanded(
           child: Text(
             tip,
-            style: const TextStyle(
+            style: TextStyle(
               color: AppColors.textPrimary,
               fontSize: 13,
               height: 1.5,
@@ -739,15 +738,15 @@ class _SupportTipCard extends StatelessWidget {
       CyclePhase.period =>
         'She may feel low-energy. Offer warmth, comfort food, and patience.',
       CyclePhase.fertile =>
-        'Energy and mood usually peak right now — a great time for shared plans.',
-      CyclePhase.ovulation =>
-        'Peak fertility today. Make her feel cherished.',
-      CyclePhase.predicted => 'Pre-period soon — be extra understanding.',
+        'Energy and mood usually peak right now - a great time for shared plans.',
+      CyclePhase.ovulation => 'Peak fertility today. Make her feel cherished.',
+      CyclePhase.predicted => 'Pre-period soon - be extra understanding.',
       CyclePhase.follicular =>
         'Mood often lifts after a period. A good time for activity.',
       CyclePhase.luteal =>
         'PMS can show up. Lead with empathy and small kindnesses.',
-      CyclePhase.unknown => 'Stay tuned — predictions will sharpen with more data.',
+      CyclePhase.unknown =>
+        'Stay tuned - predictions will sharpen with more data.',
     };
   }
 }
@@ -795,7 +794,7 @@ class _PartnerUnreachableState extends State<_PartnerUnreachable> {
         ownerUid: widget.partnerUid,
       );
     } catch (e) {
-      _repairError = e.toString().replaceFirst('Exception: ', '');
+      _repairError = e.toString().replaceFirst('Exception:', '');
     } finally {
       if (mounted) setState(() => _repairing = false);
     }
@@ -804,15 +803,15 @@ class _PartnerUnreachableState extends State<_PartnerUnreachable> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(24),
       child: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.cloud_off_rounded,
+            Icon(Icons.cloud_off_rounded,
                 size: 56, color: AppColors.textTertiary),
-            const SizedBox(height: 16),
-            const Text(
+            SizedBox(height: 16),
+            Text(
               'Can\'t reach your partner\'s data',
               textAlign: TextAlign.center,
               style: TextStyle(
@@ -821,54 +820,52 @@ class _PartnerUnreachableState extends State<_PartnerUnreachable> {
                 fontSize: 18,
               ),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             Text(
               widget.hasError
                   ? 'We just tried to repair the connection. If this keeps showing, your partner needs to publish the updated Firestore rules.'
                   : 'Their account isn\'t available right now.',
               textAlign: TextAlign.center,
-              style: const TextStyle(color: AppColors.textSecondary),
+              style: TextStyle(color: AppColors.textSecondary),
             ),
             if (widget.error != null) ...[
-              const SizedBox(height: 12),
+              SizedBox(height: 12),
               Text(widget.error!,
-                  style: const TextStyle(
-                      color: AppColors.textTertiary, fontSize: 11)),
+                  style:
+                      TextStyle(color: AppColors.textTertiary, fontSize: 11)),
             ],
             if (_repairError != null) ...[
-              const SizedBox(height: 8),
+              SizedBox(height: 8),
               Text('Repair failed: $_repairError',
-                  style: const TextStyle(
-                      color: AppColors.error, fontSize: 11)),
+                  style: TextStyle(color: AppColors.error, fontSize: 11)),
             ],
-            const SizedBox(height: 24),
-            // "Try to repair" — re-creates the partnerships doc. Fixes old
+            SizedBox(height: 24),
+            // "Try to repair" - re-creates the partnerships doc. Fixes old
             // links made before linkPartner() existed.
             ElevatedButton.icon(
               icon: _repairing
-                  ? const SizedBox(
+                  ? SizedBox(
                       width: 16,
                       height: 16,
                       child: CircularProgressIndicator(
                         strokeWidth: 2,
-                        valueColor:
-                            AlwaysStoppedAnimation<Color>(Colors.white),
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
                       ),
                     )
-                  : const Icon(Icons.healing_rounded),
-              label: Text(_repairing ? 'Repairing…' : 'Try to repair'),
+                  : Icon(Icons.healing_rounded),
+              label: Text(_repairing ? 'Repairing...' : 'Try to repair'),
               onPressed: _repairing ? null : () => _repair(),
             ),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             OutlinedButton.icon(
-              icon: const Icon(Icons.link_off_rounded),
-              label: const Text('Disconnect this partner'),
+              icon: Icon(Icons.link_off_rounded),
+              label: Text('Disconnect this partner'),
               onPressed: () async {
                 final cycle = context.read<CycleProvider>();
                 final p = cycle.profile;
                 if (p == null) return;
                 // Tear down the partnerships doc and remove just this partner
-                // from the linked list — keep the user's other partners intact.
+                // from the linked list - keep the user's other partners intact.
                 await PartnerService().unlinkPartner(
                   viewerUid: p.uid,
                   ownerUid: widget.partnerUid,
@@ -885,7 +882,7 @@ class _PartnerUnreachableState extends State<_PartnerUnreachable> {
   }
 }
 
-// Silence unused-import warnings — AppConstants is used by other partner code paths.
+// Silence unused-import warnings - AppConstants is used by other partner code paths.
 // ignore: unused_element
 typedef _Unused = AppConstants;
 
@@ -906,33 +903,28 @@ class _PartnerSwitcher extends StatelessWidget {
       height: 64,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+        padding: EdgeInsets.fromLTRB(16, 12, 16, 12),
         itemCount: uids.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        separatorBuilder: (_, __) => SizedBox(width: 8),
         itemBuilder: (ctx, i) {
           final uid = uids[i];
           final selected = uid == selectedUid;
-          return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-            stream: FirebaseFirestore.instance
-                .collection('users')
-                .doc(uid)
-                .snapshots(),
+          return StreamBuilder<UserProfile?>(
+            stream: CycleService(uid).watchProfile(),
             builder: (ctx, snap) {
               String label = 'Partner';
-              if (snap.hasData && (snap.data?.exists ?? false)) {
-                final p = UserProfile.fromMap(snap.data!.data()!);
-                label = (p.displayName ??
-                        p.username ??
-                        p.email.split('@').first)
-                    .split(' ')
-                    .first;
+              if (snap.hasData && snap.data != null) {
+                final p = snap.data!;
+                label =
+                    (p.displayName ?? p.username ?? p.email.split('@').first)
+                        .split('')
+                        .first;
               }
               return InkWell(
                 borderRadius: BorderRadius.circular(20),
                 onTap: () => onSelect(uid),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 16, vertical: 10),
+                  padding: EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                   decoration: BoxDecoration(
                     color: selected
                         ? AppColors.primary
@@ -943,16 +935,12 @@ class _PartnerSwitcher extends StatelessWidget {
                     children: [
                       Icon(Icons.favorite_rounded,
                           size: 14,
-                          color: selected
-                              ? Colors.white
-                              : AppColors.primary),
-                      const SizedBox(width: 6),
+                          color: selected ? Colors.white : AppColors.primary),
+                      SizedBox(width: 6),
                       Text(
                         label,
                         style: TextStyle(
-                          color: selected
-                              ? Colors.white
-                              : AppColors.primary,
+                          color: selected ? Colors.white : AppColors.primary,
                           fontWeight: FontWeight.w600,
                           fontSize: 13,
                         ),
@@ -979,6 +967,30 @@ class _AddAnotherPartnerBar extends StatefulWidget {
 class _AddAnotherPartnerBarState extends State<_AddAnotherPartnerBar> {
   final _partnerSvc = PartnerService();
   bool _busy = false;
+
+  Future<void> _importFile() async {
+    setState(() => _busy = true);
+    try {
+      final data = await PartnerShareIo.pickSnapshot();
+      if (data == null) return;
+      await context.read<CycleProvider>().importPartnerSnapshot(data);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Imported another cycle'),
+          backgroundColor: AppColors.success,
+        ));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(e.toString().replaceFirst('Exception:', '')),
+          backgroundColor: AppColors.error,
+        ));
+      }
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
 
   Future<void> _addCode() async {
     final code = await showDialog<String>(
@@ -1008,7 +1020,7 @@ class _AddAnotherPartnerBarState extends State<_AddAnotherPartnerBar> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          content: Text(e.toString().replaceFirst('Exception:', '')),
           backgroundColor: AppColors.error,
         ));
       }
@@ -1022,17 +1034,31 @@ class _AddAnotherPartnerBarState extends State<_AddAnotherPartnerBar> {
     return SafeArea(
       top: false,
       child: Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
-        child: OutlinedButton.icon(
-          onPressed: _busy ? null : _addCode,
-          icon: _busy
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.add_rounded),
-          label: const Text('Add another partner'),
+        padding: EdgeInsets.fromLTRB(16, 8, 16, 12),
+        child: Row(
+          children: [
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _importFile,
+                icon: Icon(Icons.file_open_rounded),
+                label: Text('Import file'),
+              ),
+            ),
+            SizedBox(width: 8),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: _busy ? null : _addCode,
+                icon: _busy
+                    ? SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : Icon(Icons.pin_rounded),
+                label: Text('PIN'),
+              ),
+            ),
+          ],
         ),
       ),
     );
@@ -1050,19 +1076,19 @@ class _AddCodeDialogState extends State<_AddCodeDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Add partner\'s code'),
+      title: Text('Add partner\'s code'),
       content: TextField(
         controller: _ctrl,
         autofocus: true,
         keyboardType: TextInputType.number,
         maxLength: 6,
         textAlign: TextAlign.center,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 26,
           fontWeight: FontWeight.w700,
           letterSpacing: 6,
         ),
-        decoration: const InputDecoration(
+        decoration: InputDecoration(
           hintText: '000000',
           counterText: '',
         ),
@@ -1070,11 +1096,11 @@ class _AddCodeDialogState extends State<_AddCodeDialog> {
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text('Cancel'),
         ),
         TextButton(
           onPressed: () => Navigator.of(context).pop(_ctrl.text.trim()),
-          child: const Text('Connect'),
+          child: Text('Connect'),
         ),
       ],
     );
@@ -1101,7 +1127,7 @@ class _ConfirmDeleteDialogState extends State<_ConfirmDeleteDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Row(children: [
+      title: Row(children: [
         Icon(Icons.warning_amber_rounded, color: AppColors.error),
         SizedBox(width: 8),
         Text('Delete account?'),
@@ -1110,36 +1136,35 @@ class _ConfirmDeleteDialogState extends State<_ConfirmDeleteDialog> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          const Text(
+          Text(
             'This permanently erases your partner links, profile, and account. This cannot be undone.',
             style: TextStyle(height: 1.4),
           ),
-          const SizedBox(height: 16),
-          const Text(
+          SizedBox(height: 16),
+          Text(
             'Type DELETE to confirm:',
             style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           TextField(
             controller: _ctrl,
             autofocus: true,
             textCapitalization: TextCapitalization.characters,
             onChanged: (_) => setState(() {}),
-            decoration: const InputDecoration(hintText: 'DELETE'),
+            decoration: InputDecoration(hintText: 'DELETE'),
           ),
         ],
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Cancel'),
+          child: Text('Cancel'),
         ),
         TextButton(
           onPressed: _canConfirm
               ? () => Navigator.of(context).pop(_ctrl.text.trim().toUpperCase())
               : null,
-          child:
-              const Text('Delete', style: TextStyle(color: AppColors.error)),
+          child: Text('Delete', style: TextStyle(color: AppColors.error)),
         ),
       ],
     );

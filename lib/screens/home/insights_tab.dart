@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/theme/app_colors.dart';
 import '../../models/cycle.dart';
+import '../../models/tracking_mode.dart';
 import '../../providers/cycle_provider.dart';
 import '../../widgets/stat_card.dart';
 
@@ -17,29 +18,45 @@ class InsightsTab extends StatelessWidget {
         .where((c) => c.cycleLength != null)
         .toList()
         .reversed
-        .toList(); // oldest → newest for chart
+        .toList(); // oldest > newest for chart
+    final mode = cycle.trackingMode ?? TrackingMode.period;
 
     return SafeArea(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+        padding: EdgeInsets.fromLTRB(20, 16, 20, 100),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Insights',
+            Text(
+              mode.insightsTitle,
               style: TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 24,
                 fontWeight: FontWeight.w700,
               ),
             ),
-            const SizedBox(height: 6),
+            SizedBox(height: 6),
             Text(
-              '${cycle.cycles.length} cycles tracked',
-              style: const TextStyle(color: AppColors.textSecondary),
+              mode == TrackingMode.pregnancy
+                  ? (cycle.pregnancyStatus == null
+                      ? 'Add a due date to see your week-by-week picture'
+                      : 'Week ${cycle.pregnancyStatus!.weeksAlong} Â· ${cycle.pregnancyStatus!.trimesterLabel}')
+                  : '${cycle.cycles.length} cycles tracked',
+              style: TextStyle(color: AppColors.textSecondary),
             ),
-            const SizedBox(height: 20),
-            if (cycle.prediction != null) ...[
+            SizedBox(height: 20),
+            if (mode == TrackingMode.pregnancy &&
+                cycle.pregnancyStatus != null) ...[
+              StatCard(
+                icon: Icons.child_friendly_rounded,
+                label: 'Baby kicks logged',
+                value: '${cycle.totalKicks}',
+                subtitle: '${cycle.todayKicks} today',
+                color: AppColors.accent,
+              ),
+              SizedBox(height: 16),
+            ],
+            if (mode != TrackingMode.pregnancy && cycle.prediction != null) ...[
               Row(
                 children: [
                   Expanded(
@@ -50,7 +67,7 @@ class InsightsTab extends StatelessWidget {
                       color: AppColors.accent,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
                       icon: Icons.water_drop_outlined,
@@ -59,7 +76,7 @@ class InsightsTab extends StatelessWidget {
                       color: AppColors.period,
                     ),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: StatCard(
                       icon: cycle.prediction!.isIrregular
@@ -76,11 +93,11 @@ class InsightsTab extends StatelessWidget {
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
             ],
             if (completed.length >= 2) ...[
               _ChartCard(cycles: completed),
-              const SizedBox(height: 24),
+              SizedBox(height: 24),
             ],
             _historySection(cycle.cycles),
           ],
@@ -92,15 +109,14 @@ class InsightsTab extends StatelessWidget {
   Widget _historySection(List<Cycle> cycles) {
     if (cycles.isEmpty) {
       return Container(
-        padding: const EdgeInsets.all(28),
+        padding: EdgeInsets.all(28),
         decoration: BoxDecoration(
           color: AppColors.surfaceAlt,
           borderRadius: BorderRadius.circular(20),
         ),
-        child: const Column(
+        child: Column(
           children: [
-            Icon(Icons.insights_outlined,
-                color: AppColors.primary, size: 36),
+            Icon(Icons.insights_outlined, color: AppColors.primary, size: 36),
             SizedBox(height: 12),
             Text(
               'No cycles logged yet. Once you log a few, charts and patterns will appear here.',
@@ -115,7 +131,7 @@ class InsightsTab extends StatelessWidget {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Cycle history',
           style: TextStyle(
             color: AppColors.textPrimary,
@@ -123,10 +139,10 @@ class InsightsTab extends StatelessWidget {
             fontWeight: FontWeight.w700,
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
         ...cycles.take(10).map((c) => Container(
-              margin: const EdgeInsets.only(bottom: 10),
-              padding: const EdgeInsets.all(16),
+              margin: EdgeInsets.only(bottom: 10),
+              padding: EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: AppColors.surface,
                 borderRadius: BorderRadius.circular(16),
@@ -147,26 +163,26 @@ class InsightsTab extends StatelessWidget {
                       color: AppColors.period.withOpacity(0.15),
                       borderRadius: BorderRadius.circular(12),
                     ),
-                    child: const Icon(Icons.water_drop_rounded,
-                        color: AppColors.period),
+                    child:
+                        Icon(Icons.water_drop_rounded, color: AppColors.period),
                   ),
-                  const SizedBox(width: 12),
+                  SizedBox(width: 12),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           _fmtFull(c.startDate),
-                          style: const TextStyle(
+                          style: TextStyle(
                             color: AppColors.textPrimary,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        const SizedBox(height: 2),
+                        SizedBox(height: 2),
                         Text(
                           'Period: ${c.periodLength} days'
-                          '${c.cycleLength != null ? "  •  Cycle: ${c.cycleLength} days" : "  •  Active"}',
-                          style: const TextStyle(
+                          '${c.cycleLength != null ? " * Cycle: ${c.cycleLength} days" : " * Active"}',
+                          style: TextStyle(
                               color: AppColors.textSecondary, fontSize: 12),
                         ),
                       ],
@@ -199,7 +215,7 @@ class InsightsTab extends StatelessWidget {
 }
 
 class _ChartCard extends StatelessWidget {
-  final List<Cycle> cycles; // oldest → newest, all have cycleLength
+  final List<Cycle> cycles; // oldest > newest, all have cycleLength
   const _ChartCard({required this.cycles});
 
   @override
@@ -212,7 +228,7 @@ class _ChartCard extends StatelessWidget {
         cycles.length;
 
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: EdgeInsets.all(20),
       decoration: BoxDecoration(
         color: AppColors.surface,
         borderRadius: BorderRadius.circular(24),
@@ -227,7 +243,7 @@ class _ChartCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Cycle length over time',
             style: TextStyle(
               color: AppColors.textPrimary,
@@ -237,10 +253,9 @@ class _ChartCard extends StatelessWidget {
           ),
           Text(
             'Average: ${avg.toStringAsFixed(1)} days',
-            style: const TextStyle(
-                color: AppColors.textSecondary, fontSize: 12),
+            style: TextStyle(color: AppColors.textSecondary, fontSize: 12),
           ),
-          const SizedBox(height: 18),
+          SizedBox(height: 18),
           SizedBox(
             height: 180,
             child: LineChart(
@@ -265,7 +280,7 @@ class _ChartCard extends StatelessWidget {
                       interval: 7,
                       getTitlesWidget: (v, _) => Text(
                         v.toInt().toString(),
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: AppColors.textTertiary, fontSize: 11),
                       ),
                     ),
@@ -276,7 +291,7 @@ class _ChartCard extends StatelessWidget {
                       interval: 1,
                       getTitlesWidget: (v, _) => Text(
                         '#${v.toInt() + 1}',
-                        style: const TextStyle(
+                        style: TextStyle(
                             color: AppColors.textTertiary, fontSize: 11),
                       ),
                     ),
