@@ -1,0 +1,14 @@
+# Render Blueprint — Cyclus Privacy Policy (static site)
+services:
+  - type: web
+    name: cyclus-privacy
+    runtime: static
+    plan: free
+    branch: main
+    rootDir: privacy-site
+    buildCommand: ""
+    staticPublishPath: .
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
